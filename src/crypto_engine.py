@@ -2,9 +2,9 @@ import json
 import hashlib
 import time
 import secrets
+import os
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.padding import PSS, MGF1
 
 # ==========================================
 # 1. KEY MANAGEMENT (RSA 2048)
@@ -29,6 +29,19 @@ def serialize_public_key(public_key) -> bytes:
 def deserialize_public_key(pem_bytes: bytes):
     """Loads a Public Key object from PEM bytes."""
     return serialization.load_pem_public_key(pem_bytes)
+
+def save_public_key_to_file(public_key, file_path: str = "keys/public_key.pem"):
+    """Saves a Public Key to a .pem file on disk."""
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    pem_bytes = serialize_public_key(public_key)
+    with open(file_path, "wb") as f:
+        f.write(pem_bytes)
+
+def load_public_key_from_file(file_path: str = "keys/public_key.pem"):
+    """Loads a Public Key from a .pem file on disk."""
+    with open(file_path, "rb") as f:
+        pem_bytes = f.read()
+    return deserialize_public_key(pem_bytes)
 
 
 # ==========================================
@@ -66,10 +79,8 @@ def sign_payload(payload_dict: dict, private_key) -> bytes:
     Converts payload dictionary to JSON bytes, signs it using RSA Private Key,
     and returns a combined byte package ready for steganographic embedding.
     """
-    # Convert dict to deterministic JSON string bytes
     payload_bytes = json.dumps(payload_dict, sort_keys=True).encode('utf-8')
     
-    # Generate RSA Signature
     signature = private_key.sign(
         payload_bytes,
         padding.PSS(
@@ -79,7 +90,6 @@ def sign_payload(payload_dict: dict, private_key) -> bytes:
         hashes.SHA256()
     )
     
-    # Format package: [4 bytes payload len][payload bytes][signature bytes]
     payload_len = len(payload_bytes).to_bytes(4, byteorder='big')
     return payload_len + payload_bytes + signature
 
@@ -118,27 +128,3 @@ def verify_media_integrity(stego_file_path: str, expected_hash: str) -> bool:
     """Re-computes current stego file hash and checks against embedded hash."""
     current_hash = compute_file_hash(stego_file_path)
     return current_hash == expected_hash
-
-if __name__ == "__main__":
-    # 1. Generate keys
-    private_key, public_key = generate_key_pair()
-    
-    # 2. Mock payload setup
-    dummy_payload = {
-        "media_id": "PNG_TEST_001",
-        "timestamp": 1700000000,
-        "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "nonce": "a1b2c3d4",
-        "metadata": "INF2005 Assignment"
-    }
-    
-    # 3. Sign
-    signed_bytes = sign_payload(dummy_payload, private_key)
-    print(f"Total Signed Package Size: {len(signed_bytes)} bytes")
-    
-    # 4. Unpack & Verify
-    extracted_dict, sig = unpack_payload_package(signed_bytes)
-    is_valid = verify_signature(extracted_dict, sig, public_key)
-    
-    print(f"Extraction Successful: {extracted_dict['media_id']}")
-    print(f"Signature Verification Result: {'AUTHENTIC' if is_valid else 'TAMPERED/INVALID'}")

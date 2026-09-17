@@ -1,5 +1,21 @@
+import sys
+import os
 import numpy as np
 from PIL import Image
+
+# Automatically add project root to python path to prevent "No module named 'src'"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from src.crypto_engine import (
+    generate_key_pair, 
+    save_public_key_to_file,
+    load_public_key_from_file,
+    create_payload_dict, 
+    sign_payload, 
+    unpack_payload_package, 
+    verify_signature
+)
+
 
 def bytes_to_bits(data_bytes: bytes) -> str:
     """Converts a byte string into a binary bit string ('0's and '1's)."""
@@ -7,12 +23,10 @@ def bytes_to_bits(data_bytes: bytes) -> str:
 
 def bits_to_bytes(bit_string: str) -> bytes:
     """Converts a binary bit string back into raw bytes."""
-    # Truncate bit string to nearest multiple of 8
     length = (len(bit_string) // 8) * 8
-    byte_list = []
-    for i in range(0, length, 8):
-        byte_list.append(int(bit_string[i:i+8], 2))
+    byte_list = [int(bit_string[i:i+8], 2) for i in range(0, length, 8)]
     return bytes(byte_list)
+
 
 # ==========================================
 # 1. IMAGE LSB EMBEDDING
@@ -25,33 +39,18 @@ def embed_payload_in_image(
     bits_per_channel: int = 1,
     start_pixel_offset: int = 0
 ) -> str:
-    """
-    Embeds raw payload bytes into a PNG image using LSB replacement.
-    
-    :param cover_image_path: Path to original PNG.
-    :param payload_bytes: Complete signed byte package from crypto_engine.py.
-    :param output_stego_path: Path to save the stego PNG.
-    :param bits_per_channel: Number of LSBs to use per color channel (1 to 8).
-    :param start_pixel_offset: Starting pixel index for embedding.
-    :return: Output stego image path.
-    """
     if not (1 <= bits_per_channel <= 8):
         raise ValueError("bits_per_channel must be between 1 and 8.")
     
-    # Load PNG image and convert to RGB
     img = Image.open(cover_image_path).convert('RGB')
     img_array = np.array(img, dtype=np.uint8)
-    shape = img_array.shape # (height, width, 3)
+    shape = img_array.shape
     
-    # Flatten array to 1D channel values for easier bit-level indexing
     flat_pixels = img_array.flatten()
     
-    # Convert payload into a stream of bit characters ('0' / '1')
-    bit_stream = bytes_to_bits(payload_bytes)
-    
-    # Add a 32-bit header at the start indicating total payload byte length
+    # 32-bit payload length header + payload bit stream
     payload_len_bits = f"{len(payload_bytes):032b}"
-    full_bit_stream = payload_len_bits + bit_stream
+    full_bit_stream = payload_len_bits + bytes_to_bits(payload_bytes)
     
     # Capacity Check
     start_channel_index = start_pixel_offset * 3
@@ -63,26 +62,24 @@ def embed_payload_in_image(
             f"cover image capacity ({available_capacity_bits} bits)!"
         )
     
-    # Embed bits into LSBs
     bit_index = 0
     total_bits = len(full_bit_stream)
     channel_index = start_channel_index
     
-    # Bitmask to clear the lowest 'bits_per_channel' bits
     mask = ~((1 << bits_per_channel) - 1) & 0xFF
     
     while bit_index < total_bits:
-        # Extract next chunk of bits to embed in this color channel
         chunk = full_bit_stream[bit_index : bit_index + bits_per_channel]
+        # Pad final chunk if remaining bits < bits_per_channel
+        if len(chunk) < bits_per_channel:
+            chunk = chunk.ljust(bits_per_channel, '0')
+            
         chunk_val = int(chunk, 2)
-        
-        # Clear LSBs of current pixel channel and write new payload bits
         flat_pixels[channel_index] = (flat_pixels[channel_index] & mask) | chunk_val
         
-        bit_index += len(chunk)
+        bit_index += bits_per_channel
         channel_index += 1
     
-    # Reshape flattened array back to image dimensions and save as uncompressed PNG
     stego_array = flat_pixels.reshape(shape)
     stego_img = Image.fromarray(stego_array, mode='RGB')
     stego_img.save(output_stego_path, format='PNG')
@@ -99,101 +96,99 @@ def extract_payload_from_image(
     bits_per_channel: int = 1,
     start_pixel_offset: int = 0
 ) -> bytes:
-    """
-    Extracts embedded payload bytes from a stego PNG file.
-    
-    :param stego_image_path: Path to stego PNG.
-    :param bits_per_channel: Number of LSBs used per color channel (1 to 8).
-    :param start_pixel_offset: Starting pixel index used during embedding.
-    :return: Raw payload bytes (ready for unpacking by crypto_engine.py).
-    """
     img = Image.open(stego_image_path).convert('RGB')
     flat_pixels = np.array(img, dtype=np.uint8).flatten()
     
     channel_index = start_pixel_offset * 3
     bit_mask = (1 << bits_per_channel) - 1
     
-    # 1. Read the first 32 bits to determine payload length
-    header_bits = ""
-    while len(header_bits) < 32:
+    # Extract raw bit stream from channels
+    extracted_bit_stream = ""
+    
+    # Read first 32 bits (4 bytes) to determine payload length
+    while len(extracted_bit_stream) < 32:
         val = flat_pixels[channel_index] & bit_mask
-        bits = f"{val:0{bits_per_channel}b}"
-        header_bits += bits
+        extracted_bit_stream += f"{val:0{bits_per_channel}b}"
         channel_index += 1
         
-    payload_length_bytes = int(header_bits[:32], 2)
-    total_payload_bits = payload_length_bytes * 8
+    payload_length_bytes = int(extracted_bit_stream[:32], 2)
+    total_required_bits = 32 + (payload_length_bytes * 8)
     
-    # 2. Extract remaining payload bits
-    payload_bits = header_bits[32:]  # Keep leftover bits from header reading
-    
-    while len(payload_bits) < total_payload_bits:
+    # Read remaining bits up to total_required_bits
+    while len(extracted_bit_stream) < total_required_bits:
         val = flat_pixels[channel_index] & bit_mask
-        bits = f"{val:0{bits_per_channel}b}"
-        payload_bits += bits
+        extracted_bit_stream += f"{val:0{bits_per_channel}b}"
         channel_index += 1
         
-    # Truncate to exact required length and convert back to bytes
-    payload_bits = payload_bits[:total_payload_bits]
+    payload_bits = extracted_bit_stream[32:total_required_bits]
     return bits_to_bytes(payload_bits)
 
+
 # ==========================================
-# LOCAL INTEGRATION TEST
+# 3. UNIT TESTS
 # ==========================================
-if __name__ == "__main__":
-    from crypto_engine import (
-        generate_key_pair, 
-        create_payload_dict, 
-        sign_payload, 
-        unpack_payload_package, 
-        verify_signature
+
+def run_tests():
+    print("==================================================")
+    print("      RUNNING INF2005 STEGANOGRAPHY TESTS        ")
+    print("==================================================\n")
+
+    if not os.path.exists("sample.png"):
+        print("[!] ERROR: 'sample.png' not found in root folder.")
+        print("Please place a PNG image named 'sample.png' in your project root folder.")
+        return
+
+    print("[1] Generating RSA Key Pairs...")
+    private_key_A, public_key_A = generate_key_pair()
+    private_key_B, public_key_B = generate_key_pair()
+    
+    save_public_key_to_file(public_key_A, "keys/public_key.pem")
+    print("    -> Saved legitimate public key to 'keys/public_key.pem'")
+
+    print("\n[2] Creating and Signing Payload...")
+    payload_dict = create_payload_dict(
+        media_id="PNG_TEST_001", 
+        file_path="sample.png", 
+        custom_metadata="SIT INF2005 Assignment"
     )
+    signed_bytes = sign_payload(payload_dict, private_key_A)
+    print(f"    -> Payload signed. Package size: {len(signed_bytes)} bytes")
+
+    print("\n[3] Embedding Payload into 'sample.png'...")
+    embed_payload_in_image(
+        cover_image_path="sample.png",
+        payload_bytes=signed_bytes,
+        output_stego_path="stego_sample.png",
+        bits_per_channel=2,      # 2 LSBs
+        start_pixel_offset=500   # Custom start location
+    )
+    print("    -> Successfully created 'stego_sample.png'")
+
+    print("\n--------------------------------------------------")
+    print(" TEST CASE 1: POSITIVE TEST (Valid Public Key)")
+    print("--------------------------------------------------")
     
-    print("--- STARTING TEST ---")
+    extracted_bytes = extract_payload_from_image(
+        stego_image_path="stego_sample.png",
+        bits_per_channel=2,
+        start_pixel_offset=500
+    )
+    extracted_dict, sig = unpack_payload_package(extracted_bytes)
     
-    # 1. Setup keys and payload
-    private_key, public_key = generate_key_pair()
-    mock_payload = {
-        "media_id": "PNG_DEMO_001",
-        "timestamp": 1700000000,
-        "file_hash": "a1b2c3d4e5f67890",
-        "nonce": "12345678",
-        "metadata": "INF2005 Test Case"
-    }
+    loaded_pub_key = load_public_key_from_file("keys/public_key.pem")
+    is_valid_1 = verify_signature(extracted_dict, sig, loaded_pub_key)
     
-    # 2. Sign payload using crypto_engine
-    signed_bytes = sign_payload(mock_payload, private_key)
-    print(f"[Crypto] Signed Package Size: {len(signed_bytes)} bytes")
+    print(f"Media ID : {extracted_dict['media_id']}")
+    print(f"Result   : {'[PASS] AUTHENTIC' if is_valid_1 else '[FAIL] UNEXPECTED REJECTION'}")
+
+    print("\n--------------------------------------------------")
+    print(" TEST CASE 2: NEGATIVE TEST (Wrong Public Key)")
+    print("--------------------------------------------------")
     
-    # 3. Embed into PNG starting at pixel 500 using 2 LSBs
-    try:
-        embed_payload_in_image(
-            cover_image_path="sample.png",
-            payload_bytes=signed_bytes,
-            output_stego_path="stego_sample.png",
-            bits_per_channel=2,
-            start_pixel_offset=500
-        )
-        print("[Stego] Successfully embedded payload -> Saved to 'stego_sample.png'")
-        
-        # 4. Extract from PNG using matching parameters
-        extracted_bytes = extract_payload_from_image(
-            stego_image_path="stego_sample.png",
-            bits_per_channel=2,
-            start_pixel_offset=500
-        )
-        print(f"[Stego] Extracted Raw Bytes Size: {len(extracted_bytes)} bytes")
-        
-        # 5. Unpack and verify with crypto_engine
-        extracted_dict, sig = unpack_payload_package(extracted_bytes)
-        is_authentic = verify_signature(extracted_dict, sig, public_key)
-        
-        print("\n================ VERIFICATION RESULT ================")
-        print(f"Extracted Media ID : {extracted_dict['media_id']}")
-        print(f"Extracted Nonce    : {extracted_dict['nonce']}")
-        print(f"Signature Status   : {'AUTHENTIC PASS' if is_authentic else 'TAMPERED FAIL'}")
-        print("=====================================================")
-        
-    except FileNotFoundError:
-        print("\n[!] ERROR: 'sample.png' not found!")
-        print("Please drop a standard PNG image named 'sample.png' into your project folder to run this test.")
+    is_valid_2 = verify_signature(extracted_dict, sig, public_key_B)
+    
+    print(f"Result   : {'[FAIL] SIGNATURE INVALID (EXPECTED BEHAVIOR)' if not is_valid_2 else '[FAIL] INCORRECTLY ACCEPTED'}")
+    print("==================================================\n")
+
+if __name__ == "__main__":
+    run_tests()
