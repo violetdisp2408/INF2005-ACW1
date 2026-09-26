@@ -1,0 +1,5 @@
+flask>=3.0
+pillow>=10.0
+numpy>=1.24
+cryptography>=41.0
+soundfile>=0.12   # reads MP3/FLAC/OGG uploads and converts them to WAV

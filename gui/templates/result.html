@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Protected{% endblock %}
+{% block main %}
+<div class="crumb"><a href="{{ url_for('protect') }}">1. Protect</a> › Result</div>
+<h2>File protected: {{ r.media_id }}</h2>
+{% for n in r.notes %}<div class="alert note">{{ n }}</div>{% endfor %}
+<div class="help"><b>What you're looking at</b>
+  The file before and after hiding the note, so you can see what steganography changed: which {{ 'pixels' if r.kind == 'image' else 'samples' }}, by how much, and exactly which bits.
+</div>
+
+<h3 class="section">What changed after hiding the note</h3>
+<div class="stats">
+  <div class="stat"><b>{{ '{:,}'.format(v.changed_pixels if r.kind == 'image' else v.changed_samples) }}</b>
+    <span>{{ 'pixels' if r.kind == 'image' else 'samples' }} changed{% if r.kind == 'image' %} of {{ '{:,}'.format(v.size[0] * v.size[1]) }} ({{ '%.2f'|format(v.changed_pct) }}%){% else %} in {{ '%.1f'|format(v.seconds) }} s{% endif %}</span></div>
+  <div class="stat"><b>±{{ v.biggest_change }}</b>
+    <span>biggest change to any single value (0–255). With {{ r.nbits }} LSB{{ 's' if r.nbits > 1 }} it can never be more than ±{{ v.max_possible }}</span></div>
+  {% if r.kind == 'image' %}
+  <div class="stat"><b>{{ '%.1f'|format(v.psnr) if v.psnr else '∞' }} dB</b><span>PSNR. Above about 40 dB the eye can't tell the difference</span></div>
+  {% else %}
+  <div class="stat"><b>{{ '%.1f'|format(v.snr) if v.snr else '∞' }} dB</b><span>SNR: how much louder the sound is than the noise the note added</span></div>
+  {% endif %}
+  <div class="stat"><b>{{ '%.1f'|format(100 * r.needed_bits / r.available_bits) }}%</b><span>of the space after the start position used ({{ '{:,}'.format(r.needed_bits) }} bits)</span></div>
+</div>
+
+<div class="grid">
+{% if r.kind == 'image' %}
+  <div class="card">
+    <h3>Original</h3>
+    <img class="view" src="{{ url_for('job_file', job_id=job_id, name='preview-cover.png') }}" alt="original">
+  </div>
+  <div class="card">
+    <h3>Protected (note hidden inside)</h3>
+    <img class="view" src="{{ url_for('job_file', job_id=job_id, name='preview-stego.png') }}" alt="protected">
+  </div>
+  <div class="card">
+    <h3>Which pixels changed</h3>
+    <p class="what">Black = unchanged. White = changed, made bright so you can see them. The blue box marks the rows the note sits in, starting at pixel {{ '{:,}'.format(r.start) }} (x {{ v.start_xy[0] }}, y {{ v.start_xy[1] }}).</p>
+    <img class="view" src="{{ url_for('job_file', job_id=job_id, name='preview-diff.png') }}" alt="difference map">
+  </div>
+  <div class="card">
+    <h3>Magnified ×6 where the note starts</h3>
+    <p class="what">A 96×24-pixel patch from (x {{ v.zoom_origin[0] }}, y {{ v.zoom_origin[1] }}). Red = a pixel the note changed; the rest is the original, dimmed.</p>
+    <img class="view pixelated" src="{{ url_for('job_file', job_id=job_id, name='preview-zoom.png') }}" alt="magnified changed pixels">
+  </div>
+{% else %}
+  <div class="card">
+    <h3>Listen: original vs protected</h3>
+    <p class="what">They should sound the same.</p>
+    <p class="small" style="margin:0">Original</p>
+    <audio controls preload="none" src="{{ url_for('job_file', job_id=job_id, name=r.cover_file) }}"></audio>
+    <p class="small" style="margin:8px 0 0">Protected</p>
+    <audio controls preload="none" src="{{ url_for('job_file', job_id=job_id, name=r.stego_file) }}"></audio>
+  </div>
+  <div class="card">
+    <h3>Where the note is</h3>
+    <p class="what">The whole clip. The shaded strip is where the note is hidden, from byte {{ '{:,}'.format(r.start) }}.</p>
+    <canvas id="env" width="600" height="120"></canvas>
+  </div>
+{% endif %}
+</div>
+{% if r.kind == 'audio' %}
+<div class="card" style="margin-top:16px">
+  <h3>Zoomed in at the start of the note</h3>
+  <p class="what">160 samples from {{ '%.3f'|format(v.zoom_start_s) }} s. Where the two lines split, that sample was changed.</p>
+  <canvas id="zoom" width="900" height="170"></canvas>
+  <div class="legend"><span><i style="background:var(--cover)"></i>original</span><span><i style="background:var(--stego)"></i>protected</span></div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:16px">
+  <h3>Bit by bit: the first {{ v.bits|length }} values the note was written into</h3>
+  <p class="what">LSB replacement only swaps the last {{ r.nbits }} bit{{ 's' if r.nbits > 1 }} (highlighted) of each value for the note's bits. The first {{ 8 - r.nbits }} bits are never touched. The first 32 bits written are the note's length (added by the {{ r.kind }} code), then the signed note itself.</p>
+  <div class="overflow"><table class="bits">
+    <tr><th>Where</th><th>Before</th><th>After</th><th>Change</th></tr>
+    {% for b in v.bits %}
+    <tr>
+      <td>{{ b.where }}</td>
+      <td class="mono">{{ b.before_bits[:b.keep] }}<mark>{{ b.before_bits[b.keep:] }}</mark> <span class="small">({{ b.before }})</span></td>
+      <td class="mono">{{ b.after_bits[:b.keep] }}<mark class="{{ 'new' if b.changed }}">{{ b.after_bits[b.keep:] }}</mark> <span class="small">({{ b.after }})</span></td>
+      <td>{% if b.changed %}{{ '%+d'|format(b.after - b.before) }}{% else %}<span class="small">same (the note's bits matched)</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+<div class="grid" style="margin-top:16px">
+  <div class="card">
+    <h3>Send to person B</h3>
+    <p class="what">Download these and email them to B (the spec's "A sends to B" step).</p>
+    <div class="alert note" style="margin:0 0 10px">Tell B separately (not in the email): <b>{{ r.nbits }} LSB{{ 's' if r.nbits > 1 }}</b>, start at <b>{{ r.start_unit }} {{ r.start }}</b>.</div>
+    <table>
+      <tr><td class="k">File ID</td><td>{{ r.media_id }}</td></tr>
+      <tr><td class="k">File</td><td>{{ r.describe }}</td></tr>
+      <tr><td class="k">LSBs used</td><td>{{ r.nbits }}</td></tr>
+      <tr><td class="k">Start</td><td>{{ r.start_unit }} {{ '{:,}'.format(r.start) }}</td></tr>
+      <tr><td class="k">Message</td><td>{{ r.message_chars }} characters</td></tr>
+      <tr><td class="k">Note size</td><td>{{ r.package_len }} bytes, including a {{ r.signature_len }}-byte signature</td></tr>
+      <tr><td class="k">Space used</td><td>{{ '{:,}'.format(r.needed_bits) }} of {{ '{:,}'.format(r.available_bits) }} bits ({{ '%.1f'|format(100 * r.needed_bits / r.available_bits) }}%)</td></tr>
+      <tr><td class="k">Hash in note</td><td class="mono">{{ r.file_hash[:16] }}…</td></tr>
+      <tr><td class="k">Key ID</td><td class="mono">{{ key_id }}</td></tr>
+    </table>
+    <div class="row" style="margin-top:14px">
+      <a class="btn" href="{{ url_for('job_download', job_id=job_id, what='bundle') }}">Download all (.zip)</a>
+      <a class="btn plain" href="{{ url_for('job_download', job_id=job_id, what='stego') }}">Protected file only</a>
+      <a class="btn plain" href="{{ url_for('public_key') }}">public_key.pem</a>
+    </div>
+    <p class="hint">The zip has the protected file and the <b>public key</b>, which is safe to share. The private key never leaves this computer.</p>
+  </div>
+  <div class="card">
+    <h3>Next</h3>
+    <p class="what">Check it yourself, or try to break it.</p>
+    <div class="row">
+      <a class="btn plain" href="{{ url_for('verify', job=job_id) }}">Verify this file</a>
+      <a class="btn plain" href="{{ url_for('attack', job=job_id) }}">Run attack tests on it</a>
+      <a class="btn plain" href="{{ url_for('protect') }}">Protect another file</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if r.kind == 'audio' %}
+<script>
+  window.AUDIO_VIEW = {{ v|tojson }};
+</script>
+<script src="{{ url_for('static', filename='audio_view.js') }}"></script>
+{% endif %}
+{% endblock %}
