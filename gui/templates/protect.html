@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Protect{% endblock %}
+{% block main %}
+<h2>1. Protect a file</h2>
+{% if error %}<div class="alert">{{ error }}<br><span class="small">Choose the file again: browsers forget it after an error.</span></div>{% endif %}
+<div class="help"><b>What happens when you press Protect</b>
+  <ol>
+    <li>It writes a small note: file ID, time, a fingerprint (hash) of your file, a random number, and your message.</li>
+    <li>It signs the note with this computer's <b>private key</b>, like a signature only we can make.</li>
+    <li>It hides the note in the tiniest bits of the pixels or sound samples (the <b>LSBs</b>), starting at the position you choose.</li>
+    <li>You tell person B the LSB count and start position separately, so only they know where to look.</li>
+  </ol>
+</div>
+<form method="post" enctype="multipart/form-data" id="protectForm">
+<div class="grid">
+  <div class="card">
+    <h3>Choose the file to protect</h3>
+    <p class="what">This is the "cover": the file the note gets hidden inside.</p>
+    <label for="mode">Cover file</label>
+    <select name="mode" id="mode">
+      {% if team %}<optgroup label="Team samples">
+        {% if team['team-image'] %}<option value="team-image" {{ 'selected' if form.mode == 'team-image' }}>Sample image · {{ team['team-image'].name }} ({{ team['team-image'].describe }})</option>{% endif %}
+        {% if team['team-audio'] %}<option value="team-audio" {{ 'selected' if form.mode == 'team-audio' }}>Sample audio · {{ '%.0f'|format(team['team-audio'].seconds) }} s tone</option>{% endif %}
+      </optgroup>{% endif %}
+      <optgroup label="Your own file">
+        <option value="image" {{ 'selected' if form.mode == 'image' }}>Upload a photo…</option>
+        <option value="audio" {{ 'selected' if form.mode == 'audio' }}>Upload an audio file…</option>
+        <option value="record" {{ 'selected' if form.mode == 'record' }}>Record audio now…</option>
+      </optgroup>
+    </select>
+    <div class="drop" id="teamBox" hidden>
+      <img class="view" id="teamImage" alt="team sample image" hidden>
+      <audio controls id="teamAudio" hidden></audio>
+      <p class="hint" id="teamHint"></p>
+    </div>
+    <div class="drop" id="pickBox">
+      <input type="file" name="cover" id="cover" accept="image/*">
+      <p class="hint" id="pickHint"></p>
+      <div id="previewBox"></div>
+    </div>
+    <div class="recbox" id="recBox" hidden>
+      <div class="lvl" id="lvl"></div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="btn rec" id="recBtn">Start recording</button>
+        <span class="mono" id="recTime">0:00 / 0:30</span>
+      </div>
+      <p class="hint">Uses this computer's microphone. Record 2 to 30 seconds. It's saved as a WAV file straight away, in the browser.</p>
+      <p class="hint" id="recError" style="color:var(--bad)" hidden></p>
+      <div id="recDone" hidden>
+        <audio controls id="recAudio"></audio>
+        <p class="hint" id="recInfo"></p>
+      </div>
+    </div>
+    <label for="media_id">File ID</label>
+    <input type="text" name="media_id" id="media_id" value="{{ form.media_id }}" placeholder="e.g. IMG_0001" maxlength="40">
+    <p class="hint">Any name you like. It's stored in the note so B can see which file this is.</p>
+  </div>
+
+  <div class="card">
+    <h3>The hidden note</h3>
+    <p class="what">The spec asks us to demo a short message, a long message, and a custom one.</p>
+    <label for="preset">Message</label>
+    <select name="preset" id="preset">
+      <option value="short" {{ 'selected' if form.preset == 'short' }}>Short: a Learning Outcome from the spec</option>
+      <option value="long" {{ 'selected' if form.preset == 'long' }}>Long: the Project Overview paragraph</option>
+      <option value="custom" {{ 'selected' if form.preset == 'custom' }}>Custom: your own message</option>
+    </select>
+    <textarea name="text" id="text" style="margin-top:8px">{{ form.text }}</textarea>
+
+    <label for="nbits">Number of LSBs to use: <span id="nbitsOut">{{ form.nbits }}</span></label>
+    <input type="range" min="1" max="8" name="nbits" id="nbits" value="{{ form.nbits }}" style="width:100%">
+    <p class="hint">How many of the lowest bits in each pixel/sample get replaced. 1 is the hardest to notice. 8 fits the most but visibly damages the file.</p>
+
+    <label>Will it fit? <span id="capText" style="font-weight:normal">choose a file first</span></label>
+    <div class="meter" id="capMeter"><i></i></div>
+    <p class="hint">Capacity check. If the note is bigger than the file can hold, the app refuses before changing anything.</p>
+
+    <label for="start">Start position (<span id="startUnit">pixel</span> number)</label>
+    <div class="row" style="flex-wrap:nowrap">
+      <input type="number" name="start" id="start" min="0" value="{{ form.start }}" required placeholder="e.g. 5000">
+      <button type="button" class="btn plain" id="randomStart" style="white-space:nowrap">Pick a random spot</button>
+    </div>
+    <p class="hint" id="startHint">Where in the file the note begins (not the top-left corner). B needs this number and the LSB count to read the note, so tell B separately, not in the same email.</p>
+    <div class="row" style="margin-top:16px"><button class="btn" id="go">Protect</button><span class="busy small">Working…</span></div>
+  </div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.ACW1 = {
+    presets: {{ presets|tojson }},
+    baseRecord: {{ base_record }},
+    team: {{ team|tojson }},
+    teamUrl: { "team-image": "{{ url_for('team_sample', mode='team-image') }}", "team-audio": "{{ url_for('team_sample', mode='team-audio') }}" }
+  };
+</script>
+<script src="{{ url_for('static', filename='recorder.js') }}"></script>
+<script src="{{ url_for('static', filename='protect.js') }}"></script>
+{% endblock %}

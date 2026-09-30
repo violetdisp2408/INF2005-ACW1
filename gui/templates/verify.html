@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Verify{% endblock %}
+{% block main %}
+<h2>2. Verify a file</h2>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+<div class="help"><b>What the app checks, in order</b>
+  It runs 3 checks using the team's functions and stops at the first one that fails. Each result the spec lists (Authentic, Tampered, Signature Invalid, Cannot Verify, Wrong Start Location, Payload Missing) just means "this check failed".
+</div>
+<div class="grid">
+  <form class="card" method="post" enctype="multipart/form-data" id="verifyForm">
+    <h3>What person B uploads</h3>
+    <label for="stego">The file you received</label>
+    <input type="file" name="stego" id="stego" accept=".png,.bmp,.tif,.tiff,.wav,image/png,audio/wav">
+    <p class="hint">The protected PNG or WAV exactly as received. A converted copy (JPEG, MP3) has lost the hidden bits.</p>
+    {% if jobs %}
+    <label for="job">…or pick a file protected on this computer</label>
+    <select name="job" id="job">
+      <option value="">(use the uploaded file)</option>
+      {% for j in jobs %}<option value="{{ j.id }}" data-nbits="{{ j.nbits }}" data-start="{{ j.start }}" {{ 'selected' if j.id == chosen }}>{{ j.media_id }} · {{ j.describe }} · {{ j.created[:16].replace('T', ' ') }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <label>Sender's public key</label>
+    <div class="radios" id="keySource">
+      <label><input type="radio" name="key_source" value="upload" {{ 'checked' if key_source != 'server' }}> Upload public_key.pem</label>
+      <label><input type="radio" name="key_source" value="server" {{ 'checked' if key_source == 'server' }}> Use this computer's key</label>
+    </div>
+    <input type="file" name="public_key" id="public_key" accept=".pem" style="margin-top:8px">
+    <p class="hint">Check that the key ID shown in the result matches the one the sender gave you.</p>
+    <div class="grid" style="gap:12px">
+      <div>
+        <label for="nbits">LSB count</label>
+        <select name="nbits" id="nbits">
+          {% for n in range(1, 9) %}<option value="{{ n }}" {{ 'selected' if (form.nbits or '1')|int == n }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="start">Start position</label>
+        <input type="number" name="start" id="start" min="0" value="{{ form.start }}" required placeholder="pixel / byte number">
+      </div>
+    </div>
+    <p class="hint">The two numbers the sender told you. With the wrong ones, the note can't be found.</p>
+    <div class="row" style="margin-top:16px"><button class="btn" id="go">Verify</button><span class="busy small">Checking… (up to 8 s if nothing's there)</span></div>
+  </form>
+
+  <div class="card">
+    <h3>Checks</h3>
+    <ul class="checks" id="checks">
+      {% for s in (result.steps if result else []) %}
+      <li class="{{ s.status }}"><span class="n">{{ '✓' if s.status == 'pass' else ('✕' if s.status == 'fail' else loop.index) }}</span>
+        <span>{{ s.title }}<span class="sub">{{ s.detail or ('not reached' if s.status == 'skipped' else '') }}</span></span></li>
+      {% else %}
+      {% for key, title, verdict in steps %}
+      <li class="shown"><span class="n">{{ loop.index }}</span><span>{{ title }}<span class="sub">If this fails: {{ verdict }}</span></span></li>
+      {% endfor %}
+      {% endfor %}
+    </ul>
+    {% if result %}
+    {% set good = result.verdict == 'Authentic' %}
+    {% set soft = result.verdict == 'Cannot Verify' or 'Payload' in result.verdict %}
+    <div class="verdict" id="verdict">Result: <span class="tag {{ 'ok' if good else ('warn' if soft else 'bad') }}">{{ result.verdict }}</span></div>
+    <p class="small">{{ result.explanation }}</p>
+    <p class="small">Checked with key ID <span class="mono">{{ result.key_id }}</span>{% if result.info.describe %} · {{ result.info.describe }}{% endif %}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if result and result.payload %}
+{% set p = result.payload %}
+<div class="card" style="margin-top:16px">
+  <h3>The hidden note that was read out</h3>
+  {% if result.verdict == 'Signature Invalid' %}<p class="alert">The signature didn't check out, so don't trust anything below.</p>{% endif %}
+  <div class="overflow"><table>
+    <tr><td class="k">File ID</td><td>{{ p.media_id }}</td></tr>
+    <tr><td class="k">Protected at</td><td class="ts" data-ts="{{ p.timestamp }}">{{ p.timestamp }}</td></tr>
+    <tr><td class="k">Nonce</td><td class="mono">{{ p.nonce }}</td></tr>
+    <tr><td class="k">Hash in note</td><td class="mono">{{ p.file_hash }}</td></tr>
+    {% if result.info.actual_hash %}<tr><td class="k">Hash of this file</td><td class="mono">{{ result.info.actual_hash }} {{ '(same)' if result.info.actual_hash == p.file_hash else '(different)' }}</td></tr>{% endif %}
+    <tr><td class="k">Message</td><td>{{ p.metadata }}</td></tr>
+  </table></div>
+</div>
+{% endif %}
+{% if result and result.received %}
+<div class="card" style="margin-top:16px">
+  <h3>The file that was checked</h3>
+  {% if result.kind == 'image' and result.received.endswith('.png') %}
+  <img class="view" style="max-width:520px" src="{{ url_for('check_file', check_id=check_id, name=result.received) }}" alt="received file">
+  {% elif result.kind == 'audio' %}
+  <audio controls src="{{ url_for('check_file', check_id=check_id, name=result.received) }}"></audio>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const keyFile = document.getElementById("public_key");
+    const sync = () => (keyFile.hidden = document.querySelector("#keySource input:checked").value === "server");
+    document.querySelectorAll("#keySource input").forEach((r) => r.addEventListener("change", sync));
+    sync();
+    // picking a file protected here fills in its settings (B would type what A told them)
+    const job = document.getElementById("job");
+    const fill = () => {
+      const o = job && job.selectedOptions[0];
+      if (o && o.value) {
+        document.getElementById("nbits").value = o.dataset.nbits;
+        document.getElementById("start").value = o.dataset.start;
+      }
+    };
+    if (job) { job.addEventListener("change", fill); if (!document.getElementById("start").value) fill(); }
+    document.getElementById("verifyForm").addEventListener("submit", (e) => { e.target.classList.add("working"); document.getElementById("go").disabled = true; });
+    document.querySelectorAll(".ts").forEach((td) => (td.textContent = new Date(+td.dataset.ts * 1000).toLocaleString()));
+    const items = [...document.querySelectorAll("#checks li:not(.shown)")];
+    items.forEach((li, i) => setTimeout(() => li.classList.add("shown"), 350 * (i + 1)));
+    const v = document.getElementById("verdict");
+    if (v) setTimeout(() => v.classList.add("shown"), 350 * (items.length + 1));
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Integrity Verifier{% endblock %} · ACW1 P3-1</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <div class="top"><span>INF2005 Cyber Security Fundamentals · ACW1</span><span>Team P3-1 · Image &amp; Audio Integrity Verifier</span></div>
+  <nav>
+    <a href="{{ url_for('home') }}" class="{{ 'on' if page == 'home' }}">Home<small>Start here</small></a>
+    <a href="{{ url_for('protect') }}" class="{{ 'on' if page == 'protect' }}">1. Protect<small>Hide a signed payload in a file</small></a>
+    <a href="{{ url_for('verify') }}" class="{{ 'on' if page == 'verify' }}">2. Verify<small>Check a file you received</small></a>
+    <a href="{{ url_for('attack') }}" class="{{ 'on' if page == 'attack' }}">3. Attack Tests<small>Try to break it on purpose</small></a>
+  </nav>
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+<footer>
+  <span>This computer's key ID: <span class="mono">{{ key_id }}</span></span>
+  <a href="{{ url_for('public_key') }}">Download public key</a>
+  <form method="post" action="{{ url_for('new_keys') }}" onsubmit="return confirm('Make a new key pair? Files protected with the old key will show Signature Invalid against the new public key.')">
+    <button class="linkbtn">Make a new key pair</button>
+  </form>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

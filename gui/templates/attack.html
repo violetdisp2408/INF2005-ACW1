@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Attack Tests{% endblock %}
+{% block main %}
+<h2>3. Attack Tests</h2>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+<div class="help"><b>Why this page exists</b>
+  The spec asks for an "innovation" and for failure cases. This page takes a protected file, attacks it in 8 different ways, runs the normal Verify (the team's functions) on each, and checks the answer is the one we expect. It gives us all our failure-case evidence in one click. The original file is never changed; each attack works on a copy.
+</div>
+{% if not jobs %}
+<div class="card"><p>Nothing to attack yet. <a href="{{ url_for('protect') }}">Protect a file</a> first.</p></div>
+{% else %}
+<form class="card" method="post" id="attackForm">
+  <label for="job" style="margin-top:0">Protected file to attack</label>
+  <select name="job" id="job">
+    {% for j in jobs %}<option value="{{ j.id }}" {{ 'selected' if j.id == chosen }}>{{ j.media_id }} · {{ j.describe }} · {{ j.nbits }} LSB · start {{ j.start }} · {{ j.created[:16].replace('T', ' ') }}</option>{% endfor %}
+  </select>
+  <div class="row" style="margin-top:14px"><button class="btn" id="go">Run all 8 tests</button><span class="busy small">Running… (image tests with wrong settings wait up to 8 s each)</span></div>
+</form>
+
+<div class="card" style="margin-top:16px">
+  {% if report %}
+  {% if report.baseline != 'Authentic' %}<div class="alert note">The untouched file already verifies as <b>{{ report.baseline }}</b>, so a "Tampered" result below doesn't prove the attack was caught. See the README: this comes from the current version of the team's hash check.</div>{% endif %}
+  <p><b>{{ report.passed }}/{{ report.rows|length }}</b> attacks gave the expected result on <b>{{ report.media_id }}</b>
+    ({{ report.kind }}, {{ report.nbits }} LSB). The untouched file verifies as <b>{{ report.baseline }}</b>.
+    Saved as evidence: <span class="mono">evidence/{{ report.evidence }}</span></p>
+  {% endif %}
+  <div class="overflow"><table>
+    <tr><th>Attack</th><th>In plain words</th><th>Verify should say</th><th>Result</th></tr>
+    {% if report %}
+      {% for row in report.rows %}
+      <tr><td><b>{{ row.name }}</b></td><td>{{ row.plain }}<br><span class="small">{{ row.what }}</span></td><td>{{ row.expected }}</td>
+        <td><span class="tag {{ 'ok' if row.ok else 'bad' }}">{{ row.actual }}</span></td></tr>
+      {% endfor %}
+    {% else %}
+      {% for key, name, plain, expected in attack_list %}
+      <tr><td><b>{{ name }}</b></td><td>{{ plain }}</td><td>{{ expected }}</td><td class="small">not run</td></tr>
+      {% endfor %}
+    {% endif %}
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  const f = document.getElementById("attackForm");
+  if (f) f.addEventListener("submit", () => { f.classList.add("working"); document.getElementById("go").disabled = true; });
+</script>
+{% endblock %}
