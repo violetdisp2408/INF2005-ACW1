@@ -66,6 +66,9 @@
       <option value="custom" {{ 'selected' if form.preset == 'custom' }}>Custom: your own message</option>
     </select>
     <textarea name="text" id="text" style="margin-top:8px">{{ form.text }}</textarea>
+    <label for="password">Password for the message <span style="font-weight:normal">(optional)</span></label>
+    <input type="password" name="password" id="password" autocomplete="new-password" placeholder="leave empty to hide the message as plain text">
+    <p class="hint">Keeps the message secret: it's encrypted (AES-256-GCM) before it goes into the note, so someone who finds the note can't read it without this password. The signature still covers it. Tell B the password separately, like the start position.</p>
 
     <label for="nbits">Number of LSBs to use: <span id="nbitsOut">{{ form.nbits }}</span></label>
     <input type="range" min="1" max="8" name="nbits" id="nbits" value="{{ form.nbits }}" style="width:100%">

@@ -39,6 +39,8 @@
       </div>
     </div>
     <p class="hint">The two numbers the sender told you. With the wrong ones, the note can't be found.</p>
+    <label for="password">Message password <span style="font-weight:normal">(only if the sender set one)</span></label>
+    <input type="password" name="password" id="password" autocomplete="off">
     <div class="row" style="margin-top:16px"><button class="btn" id="go">Verify</button><span class="busy small">Checking… (up to 8 s if nothing's there)</span></div>
   </form>
 
@@ -74,8 +76,14 @@
     <tr><td class="k">Protected at</td><td class="ts" data-ts="{{ p.timestamp }}">{{ p.timestamp }}</td></tr>
     <tr><td class="k">Nonce</td><td class="mono">{{ p.nonce }}</td></tr>
     <tr><td class="k">Hash in note</td><td class="mono">{{ p.file_hash }}</td></tr>
-    {% if result.info.actual_hash %}<tr><td class="k">Hash of this file</td><td class="mono">{{ result.info.actual_hash }} {{ '(same)' if result.info.actual_hash == p.file_hash else '(different)' }}</td></tr>{% endif %}
+    {% if result.info.actual_hash %}<tr><td class="k">Hash of this file</td><td class="mono">{{ result.info.actual_hash }} {{ '(same)' if result.info.actual_hash == p.file_hash else '(different)' }}<br><span class="small">hash of a copy with the note's LSBs set to 0</span></td></tr>{% endif %}
+    {% set m = result.message %}
+    {% if m and m.locked %}
+    <tr><td class="k">Message</td><td>{% if m.text is not none %}{{ m.text }} <span class="tag ok">decrypted with the password</span>{% else %}<span class="tag warn">locked</span> {{ m.error }}{% endif %}</td></tr>
+    <tr><td class="k">As stored in the note</td><td class="mono" style="word-break:break-all">{{ p.metadata[:120] }}{{ '…' if p.metadata|length > 120 }}</td></tr>
+    {% else %}
     <tr><td class="k">Message</td><td>{{ p.metadata }}</td></tr>
+    {% endif %}
   </table></div>
 </div>
 {% endif %}

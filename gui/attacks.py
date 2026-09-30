@@ -3,30 +3,16 @@
 import json
 import os
 import shutil
-import wave
 from datetime import datetime
 
 import numpy as np
-from PIL import Image
 
 from src.crypto_engine import generate_key_pair
 
+from . import attack_views as V
 from . import media as M
+from .keys import fingerprint
 from .verify import NOT_FOUND, verify
-
-
-def _save_units(media: M.Media, units: np.ndarray, out_path: str) -> str:
-    """Saves modified values back as a PNG or WAV."""
-    if media.kind == "image":
-        arr = units.reshape(media.meta["height"], media.meta["width"], 3)
-        Image.fromarray(arr, mode="RGB").save(out_path, format="PNG", compress_level=1)
-    else:
-        with wave.open(media.path, "rb") as src:
-            params = src.getparams()
-        with wave.open(out_path, "wb") as dst:
-            dst.setparams(params)
-            dst.writeframes(units.tobytes())
-    return out_path
 
 
 def _flip_package_bit(units: np.ndarray, start_unit: int, nbits: int, byte_index: int) -> None:
@@ -90,17 +76,17 @@ def run_one(key: str, job_dir: str, r: dict, public_key) -> dict:
 
     if key == "edit":
         units, what = _edit_content(media, mask)
-        _save_units(media, units, out_path)
+        M.save_units(media, units, out_path)
     elif key == "lsb":
         units = media.units.copy()
         unit = int(np.flatnonzero(~mask)[0])
         units[unit] ^= np.uint8(1)
-        _save_units(media, units, out_path)
+        M.save_units(media, units, out_path)
         what = f"flipped the lowest bit of unit {unit} (outside the note)"
     elif key == "sigbit":
         units = media.units.copy()
         _flip_package_bit(units, first_unit, nbits, r["package_len"] - 100)
-        _save_units(media, units, out_path)
+        M.save_units(media, units, out_path)
         what = "flipped one bit 100 bytes from the end of the note (inside the signature)"
     elif key == "wrongkey":
         shutil.copy(stego_path, out_path)
@@ -122,27 +108,50 @@ def run_one(key: str, job_dir: str, r: dict, public_key) -> dict:
         units = media.units.copy()
         for i in (4, 5, 6):  # first bytes of the JSON
             _flip_package_bit(units, first_unit, nbits, i)
-        _save_units(media, units, out_path)
+        M.save_units(media, units, out_path)
         what = "flipped a bit in 3 bytes at the start of the note's text"
     elif key == "plain":
         cover = M.load(os.path.join(job_dir, r["cover_file"]), allow_lossy=True)
-        _save_units(cover, cover.units, out_path)
+        M.save_units(cover, cover.units, out_path)
         what = "verified a lossless copy of the original, unprotected file"
 
     result = verify(out_path, key_used, nbits, start)
-    return {"key": key, "name": name, "plain": plain, "expected": expected, "actual": result["verdict"],
-            "ok": result["verdict"] == expected, "what": what, "file": os.path.relpath(out_path, job_dir)}
+    row = {"key": key, "name": name, "plain": plain, "expected": expected, "actual": result["verdict"],
+           "ok": result["verdict"] == expected, "what": what, "file": os.path.relpath(out_path, job_dir)}
+    row["show"] = _show(key, media, out_path, r, nbits, start, key_used, public_key, result, work)
+    return row
+
+
+def _show(key, protected, out_path, r, nbits, start, key_used, public_key, result, work) -> dict:
+    """Details for the "See what happened" panel."""
+    attacked = M.load(out_path, allow_lossy=True)
+    first = r["start"] * protected.units_per_step
+    package = V.read_bits(protected.units, first, r["nbits"], 4 + 8)[4:]
+    json_len = int.from_bytes(package[:4], "big")
+    return {
+        "why": V.WHY[key],
+        "settings": V.settings(r, nbits, start, fingerprint(key_used), fingerprint(public_key), protected.step_name),
+        "changes": V.changes(key, protected, attacked, r, json_len, work),
+        "peek": V.peek(attacked, start, nbits),
+        "steps": result["steps"],
+        "explanation": result["explanation"],
+        "download": os.path.basename(out_path),
+    }
 
 
 def run_all(job_dir: str, public_key, evidence_dir: str) -> dict:
     with open(os.path.join(job_dir, "receipt.json")) as f:
         r = json.load(f)
-    baseline = verify(os.path.join(job_dir, r["stego_file"]), public_key, r["nbits"], r["start"])
+    stego_path = os.path.join(job_dir, r["stego_file"])
+    baseline = verify(stego_path, public_key, r["nbits"], r["start"])
+    base_peek = V.peek(M.load(stego_path), r["start"], r["nbits"])
     rows = [run_one(k, job_dir, r, public_key) for k, *_ in ATTACKS]
     report = {
         "when": datetime.now().isoformat(timespec="seconds"),
         "media_id": r["media_id"], "kind": r["kind"], "nbits": r["nbits"], "start": r["start"],
         "baseline": baseline["verdict"], "rows": rows, "passed": sum(x["ok"] for x in rows),
+        "baseline_steps": baseline["steps"], "baseline_peek": base_peek,
+        "key_id": fingerprint(public_key), "package_len": r["package_len"],
     }
     os.makedirs(evidence_dir, exist_ok=True)
     base = os.path.join(evidence_dir, f"attack-tests-{r['kind']}-{datetime.now():%Y%m%d-%H%M%S}")
@@ -155,5 +164,25 @@ def run_all(job_dir: str, public_key, evidence_dir: str) -> dict:
         f.write("| Attack | What was done | Expected | Actual | OK |\n|---|---|---|---|---|\n")
         for x in rows:
             f.write(f"| {x['name']} | {x['what']} | {x['expected']} | {x['actual']} | {'✅' if x['ok'] else '❌'} |\n")
+        f.write("\n## What happened in each attack\n")
+        for x in rows:
+            sh = x["show"]
+            f.write(f"\n### {x['name']}: {x['actual']}\n\n{x['what'][:1].upper()}{x['what'][1:]}.\n\n")
+            wrong = [f"{s['what']} {s['used']} (right: {s['right']})" for s in sh["settings"] if s["wrong"]]
+            f.write(f"- Settings used: {'; '.join(wrong) if wrong else 'the right key, LSB count and start'}\n")
+            ch = sh["changes"]
+            if ch and ch["count"]:
+                f.write(f"- Values changed in the file: {ch['count']:,} ({ch['in_note']:,} inside the note, "
+                        f"{ch['outside']:,} outside)\n")
+                for c in ch["rows"][:3]:
+                    f.write(f"  - {c['where']} ({c['part']}): {c['before_bits']} → {c['after_bits']}\n")
+            else:
+                f.write("- File contents: unchanged\n")
+            pk = sh["peek"]
+            f.write(f"- Length read from the first 32 bits: {pk['length']:,} bytes "
+                    f"({'fits' if pk['fits'] else 'impossible, bigger than the space'})\n" if pk["length"] is not None else "")
+            for st in sh["steps"]:
+                f.write(f"- {st['title']}: {st['status']}{': ' + st['detail'] if st['detail'] else ''}\n")
+            f.write(f"- Why: {sh['why']}\n")
     report["evidence"] = os.path.basename(base) + ".md"
     return report

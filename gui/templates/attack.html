@@ -19,7 +19,7 @@
 
 <div class="card" style="margin-top:16px">
   {% if report %}
-  {% if report.baseline != 'Authentic' %}<div class="alert note">The untouched file already verifies as <b>{{ report.baseline }}</b>, so a "Tampered" result below doesn't prove the attack was caught. See the README: this comes from the current version of the team's hash check.</div>{% endif %}
+  {% if report.baseline != 'Authentic' %}<div class="alert note">The untouched file already verifies as <b>{{ report.baseline }}</b>, so a "Tampered" result below doesn't prove the attack was caught. Open it on the Verify page to see which check fails first.</div>{% endif %}
   <p><b>{{ report.passed }}/{{ report.rows|length }}</b> attacks gave the expected result on <b>{{ report.media_id }}</b>
     ({{ report.kind }}, {{ report.nbits }} LSB). The untouched file verifies as <b>{{ report.baseline }}</b>.
     Saved as evidence: <span class="mono">evidence/{{ report.evidence }}</span></p>
@@ -28,8 +28,8 @@
     <tr><th>Attack</th><th>In plain words</th><th>Verify should say</th><th>Result</th></tr>
     {% if report %}
       {% for row in report.rows %}
-      <tr><td><b>{{ row.name }}</b></td><td>{{ row.plain }}<br><span class="small">{{ row.what }}</span></td><td>{{ row.expected }}</td>
-        <td><span class="tag {{ 'ok' if row.ok else 'bad' }}">{{ row.actual }}</span></td></tr>
+      <tr><td><b>{{ loop.index }}. {{ row.name }}</b></td><td>{{ row.plain }}<br><span class="small">{{ row.what }}</span></td><td>{{ row.expected }}</td>
+        <td><span class="tag {{ 'ok' if row.ok else 'bad' }}">{{ row.actual }}</span><br><a class="small open-attack" href="#a-{{ row.key }}">See what happened ↓</a></td></tr>
       {% endfor %}
     {% else %}
       {% for key, name, plain, expected in attack_list %}
@@ -38,11 +38,155 @@
     {% endif %}
   </table></div>
 </div>
+
+{% if report %}
+{% set t = report.when %}
+{% macro checks(steps) %}
+<ul class="checks">
+  {% for s in steps %}
+  <li class="{{ s.status }}"><span class="n">{{ '✓' if s.status == 'pass' else ('✕' if s.status == 'fail' else loop.index) }}</span>
+    <span>{{ s.title }}<span class="sub">{{ s.detail or ('not reached: an earlier check already failed' if s.status == 'skipped' else '') }}</span></span></li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+{% macro vtag(v) %}<span class="tag {{ 'ok' if v == 'Authentic' else ('warn' if v == 'Cannot Verify' or 'Payload' in v else 'bad') }}">{{ v }}</span>{% endmacro %}
+{% macro peek(p, label) %}
+<tr><td class="k">{{ label }}</td><td>
+  {% if p.length is none %}start is past the end of the file
+  {% else %}length in the first 32 bits: <b>{{ '{:,}'.format(p.length) }} bytes</b>
+    {% if p.fits %}<span class="tag ok">possible</span>{% else %}<span class="tag bad">impossible: only {{ '{:,}'.format(p.capacity) }} fit</span>{% endif %}
+    <div class="mono peek">{{ p.text or '(nothing)' }}</div>
+    {% if p.text and p.text.count('·') * 2 > p.text|length %}<span class="hint">not readable text: just ordinary {{ 'pixel' if report.kind == 'image' else 'sound' }} bits</span>{% endif %}
+  {% endif %}</td></tr>
+{% endmacro %}
+
+<div class="toolbar">
+  <h3 class="section" style="margin:0">What happened in each attack</h3>
+  <button type="button" class="btn plain" id="openAll">Open all</button>
+</div>
+<p class="small">Each attack works on its own copy. Open one to see exactly what was changed, what Verify read, and which check stopped it.</p>
+
+<details class="card attack" id="a-baseline">
+  <summary><span><b>0. No attack</b> (for comparison)</span> {{ vtag(report.baseline) }}</summary>
+  <div class="grid">
+    <div>
+      <p class="what">The protected file exactly as it was saved, checked with the right key, LSB count and start. This is what "nothing wrong" looks like.</p>
+      <table>
+        <tr><td class="k">Key ID</td><td class="mono">{{ report.key_id }}</td></tr>
+        <tr><td class="k">LSB count</td><td>{{ report.nbits }}</td></tr>
+        <tr><td class="k">Start</td><td>{{ '{:,}'.format(report.start) }}</td></tr>
+        {{ peek(report.baseline_peek, "What the reader found") }}
+      </table>
+      <p class="hint">The length should be {{ '{:,}'.format(report.package_len) }} bytes, and the note starts with <span class="mono">{"file_hash": …</span></p>
+    </div>
+    <div><h4>Verify's checks</h4>{{ checks(report.baseline_steps) }}<div class="verdict">Result: {{ vtag(report.baseline) }}</div></div>
+  </div>
+</details>
+
+{% for row in report.rows %}
+{% set sh = row.show %}
+{% set ch = sh.changes %}
+<details class="card attack" id="a-{{ row.key }}">
+  <summary><span><b>{{ loop.index }}. {{ row.name }}</b>: {{ row.plain|lower }}</span>
+    {{ vtag(row.actual) }} <span class="small">{{ '✓ as expected' if row.ok else '✕ expected ' ~ row.expected }}</span></summary>
+  <div class="grid">
+    <div>
+      <h4>What was done</h4>
+      <p>{{ row.what[:1]|upper }}{{ row.what[1:] }}.</p>
+
+      <h4>Settings Verify was given</h4>
+      <table>
+        <tr><th></th><th>Used in this test</th><th>Right value</th></tr>
+        {% for st in sh.settings %}
+        <tr><td class="k">{{ st.what }}</td>
+          <td class="{{ 'mono' if loop.first }}">{% if st.wrong %}<span class="tag bad">{{ st.used }}</span>{% else %}{{ st.used }}{% endif %}</td>
+          <td class="{{ 'mono' if loop.first }}">{{ st.right }}</td></tr>
+        {% endfor %}
+      </table>
+
+      <h4>What changed in the file</h4>
+      {% if not ch or not ch.count %}
+      <p class="small">Nothing. The file is an exact copy of the protected file{{ '; only the settings or key are different' if row.key != 'plain' }}.</p>
+      {% else %}
+      {% if row.key == 'plain' %}<p class="small">This is the file from <i>before</i> protecting, so it differs from the protected file exactly where the note was written.</p>{% endif %}
+      <p class="small"><b>{{ '{:,}'.format(ch.count) }}</b> value{{ 's' if ch.count != 1 }} differ{{ 's' if ch.count == 1 }} from the protected file:
+        {{ '{:,}'.format(ch.in_note) }} inside the hidden note, {{ '{:,}'.format(ch.outside) }} outside it.</p>
+      <div class="overflow"><table class="bits">
+        <tr><th>Where</th><th>Part</th><th>Before</th><th>After</th></tr>
+        {% for c in ch.rows %}
+        <tr><td class="small">{{ c.where }}</td><td class="small">{{ c.part }}</td>
+          <td class="mono">{% for i in range(8) %}{% if c.flipped[i] == '1' %}<mark>{{ c.before_bits[i] }}</mark>{% else %}{{ c.before_bits[i] }}{% endif %}{% endfor %} ({{ c.before }})</td>
+          <td class="mono">{% for i in range(8) %}{% if c.flipped[i] == '1' %}<mark class="new">{{ c.after_bits[i] }}</mark>{% else %}{{ c.after_bits[i] }}{% endif %}{% endfor %} ({{ c.after }})</td></tr>
+        {% endfor %}
+        {% if ch.more %}<tr><td colspan="4" class="small">…and {{ '{:,}'.format(ch.more) }} more</td></tr>{% endif %}
+      </table></div>
+      {% endif %}
+
+      <h4>What the reader found</h4>
+      <table>
+        {{ peek(report.baseline_peek, "Protected file, right settings") }}
+        {{ peek(sh.peek, "This test") }}
+      </table>
+    </div>
+
+    <div>
+      {% if ch and ch.count %}
+        {% if report.kind == 'image' %}
+        <h4>Where the change is</h4>
+        <img class="view" src="{{ url_for('attack_file', job_id=job_id, name=ch.view) }}?t={{ t }}" alt="attacked copy with the change boxed in red">
+        <p class="hint">The attacked copy. The red box marks the changed area.</p>
+        <img class="view pixelated" src="{{ url_for('attack_file', job_id=job_id, name=ch.zoom) }}?t={{ t }}" alt="before, after and changed pixels, magnified">
+        <div class="legend"><span>Magnified ×6 from pixel ({{ ch.zoom_at[0] }}, {{ ch.zoom_at[1] }}):</span><span><b>left</b> before</span><span><b>middle</b> after</span><span><b>right</b> changed pixels in red</span></div>
+        {% else %}
+        <h4>Where the change is</h4>
+        <img class="view" src="{{ url_for('attack_file', job_id=job_id, name=ch.wave) }}?t={{ t }}" alt="waveform before and after">
+        <div class="legend"><span><i style="background:#1f5fa8"></i>before</span><span><i style="background:#c2410c"></i>after</span>
+          <span>{{ '%.3f'|format(ch.from_s) }}–{{ '%.3f'|format(ch.to_s) }} s, changed part shaded</span></div>
+        {% endif %}
+      {% endif %}
+      {% if report.kind == 'audio' %}
+      <h4>Listen to this copy</h4>
+      <audio controls preload="none" src="{{ url_for('attack_file', job_id=job_id, name=sh.download) }}?t={{ t }}"></audio>
+      {% endif %}
+
+      <h4>Verify's checks</h4>
+      {{ checks(sh.steps) }}
+      <div class="verdict">Result: {{ vtag(row.actual) }} <span class="small" style="font-weight:normal">{{ '✓ expected' if row.ok else '✕ expected ' ~ row.expected }}</span></div>
+      <p class="small">{{ sh.explanation }}</p>
+      <div class="help" style="margin:10px 0"><b>Why this is the right answer</b>{{ sh.why }}</div>
+      <a class="btn plain" href="{{ url_for('attack_file', job_id=job_id, name=sh.download) }}?dl=1">Download this copy</a>
+      <p class="hint">Try it yourself on the Verify page{% if row.key in ('wrongkey', 'wrongstart', 'wronglsb') %}, with the setting shown in red{% endif %}.</p>
+    </div>
+  </div>
+</details>
+{% endfor %}
+{% endif %}
 {% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
   const f = document.getElementById("attackForm");
   if (f) f.addEventListener("submit", () => { f.classList.add("working"); document.getElementById("go").disabled = true; });
+  // play Verify's checks one by one when a panel opens
+  const play = (d) => {
+    const items = [...d.querySelectorAll(".checks li")];
+    const verdict = d.querySelector(".verdict");
+    items.forEach((li) => li.classList.remove("shown"));
+    if (verdict) verdict.classList.remove("shown");
+    items.forEach((li, i) => setTimeout(() => li.classList.add("shown"), 300 * (i + 1)));
+    if (verdict) setTimeout(() => verdict.classList.add("shown"), 300 * (items.length + 1));
+  };
+  document.querySelectorAll("details.attack").forEach((d) => d.addEventListener("toggle", () => { if (d.open) play(d); }));
+  document.querySelectorAll(".open-attack").forEach((a) => a.addEventListener("click", () => {
+    const d = document.querySelector(a.getAttribute("href"));
+    if (d) d.open = true;
+  }));
+  const all = document.getElementById("openAll");
+  if (all) all.addEventListener("click", () => {
+    const ds = [...document.querySelectorAll("details.attack")];
+    const open = !ds.every((d) => d.open);
+    ds.forEach((d) => (d.open = open));
+    all.textContent = open ? "Close all" : "Open all";
+  });
 </script>
 {% endblock %}

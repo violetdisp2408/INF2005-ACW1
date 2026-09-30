@@ -143,6 +143,8 @@
     const m = text.value;
     let n = enc.encode(JSON.stringify(m)).length - 2;
     if (/[^\x00-\x7f]/.test(m)) n = JSON.stringify(m).length * 3;
+    // with a password the note holds "ENC1:" + base64(salt, nonce, ciphertext, tag), see gui/secret.py
+    if ($("#password").value) n = 5 + 4 * Math.ceil((16 + 12 + enc.encode(m).length + 16) / 3);
     return cfg.baseRecord + n + enc.encode($("#media_id").value || "MEDIA_001").length;
   }
   const neededUnits = (nbits) => Math.ceil((32 + 8 * noteBytes()) / nbits);
@@ -177,7 +179,7 @@
     $("#start").value = 1 + Math.floor(Math.random() * hi);
     update();
   });
-  ["#nbits", "#start", "#media_id"].forEach((s) => $(s).addEventListener("input", update));
+  ["#nbits", "#start", "#media_id", "#password"].forEach((s) => $(s).addEventListener("input", update));
 
   $("#protectForm").addEventListener("submit", (e) => {
     if (!isTeam(modeSelect.value) && !input.files.length) {
