@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block main %}
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+<h2>Image &amp; Audio Integrity Verifier</h2>
+<div class="help"><b>What this app is for</b>
+  Person A wants to send a photo or audio clip to person B. Person B wants to be sure that (1) it really came from A, and (2) nobody changed it along the way. The app hides a small signed note inside the file itself. You can't see or hear it. Person B's copy of the app reads the note back and checks it.
+</div>
+<div class="grid homecards" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
+  <a class="card" href="{{ url_for('protect') }}"><h3>1. Protect</h3><p class="what">Person A uses this. Pick a photo or audio clip (or record one) and the app hides a signed note in it. You get back a file that looks and sounds the same.</p></a>
+  <a class="card" href="{{ url_for('verify') }}"><h3>2. Verify</h3><p class="what">Person B uses this. Upload the received file and A's public key. The app says whether it's genuine or what went wrong.</p></a>
+  <a class="card" href="{{ url_for('attack') }}"><h3>3. Attack Tests</h3><p class="what">Our extra feature. It edits a protected file in bad ways (changes pixels, uses the wrong key, and so on) and shows that Verify catches each one.</p></a>
+</div>
+<div class="card" style="margin-top:16px">
+  <h3>Who built which part</h3>
+  <div class="overflow"><table><tr><th>Part</th><th>File</th><th>Member</th></tr>
+    <tr><td>Making the note + signing it with the private key</td><td class="mono">src/crypto_engine.py</td><td>M1</td></tr>
+    <tr><td>Hiding / reading the note in an image</td><td class="mono">src/image_stego.py</td><td>Nathan</td></tr>
+    <tr><td>Hiding / reading the note in audio</td><td class="mono">src/audio_stego.py</td><td>Patrick</td></tr>
+    <tr><td>This web app (the GUI) and Attack Tests</td><td class="mono">app.py, gui/</td><td>Mel</td></tr>
+  </table></div>
+</div>
+{% endblock %}
