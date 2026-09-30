@@ -1,41 +1,36 @@
 # INF2005-ACW1
 Team Project
----
+# INF2005 Cybersecurity ACW1 - Image & Audio Integrity Verifier
 
-### **1. System Dependencies**
-
+## 1. System Dependencies
 * **Python Version:** Python 3.9, 3.10, or 3.11 (Windows / macOS / Linux)
 * **Required Libraries:**
-* `Flask` (Web framework for the web GUI)
-* `cryptography` (RSA 2048 key generation, PSS padding, SHA-256 signing)
-* `numpy` (Pixel matrix processing for image steganography)
-* `Pillow` (PNG image decoding and encoding)
-
-
+  * `Flask` (Web framework for GUI)
+  * `cryptography` (RSA 2048 key generation, PSS padding, SHA-256)
+  * `numpy` (Pixel array processing)
+  * `Pillow` (Image decoding and encoding)
 
 ---
 
-### **2. Setup Instructions**
+## 2. Setup Instructions
 
-1. **1. Clone Repository & Navigate to Project Root:** Open VS Code integrated terminal.
-```bash
-git clone https://github.com/violetdisp2408/INF2005-ACW1.git
-cd INF2005-ACW1
+1. **Clone Repository & Navigate to Project Root:**
+   ```bash
+   git clone [https://github.com/violetdisp2408/INF2005-ACW1.git](https://github.com/violetdisp2408/INF2005-ACW1.git)
+   cd INF2005-ACW1
 
 ```
 
-
-2. **2. Create & Activate Virtual Environment:** Isolated environment for project dependencies.
+2. **Create & Activate Virtual Environment:**
 * **Windows (PowerShell):**
-
 ```powershell
 py -m venv .venv
 \.venv\Scripts\activate
 
 ```
 
-* **macOS / Linux:**
 
+* **macOS / Linux:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -43,36 +38,51 @@ source .venv/bin/activate
 ```
 
 
-3. **3. Install Dependencies:** Install required Python libraries.
+
+
+3. **Install Dependencies:**
 ```bash
 pip install -r requirements.txt
 
 ```
 
-*If `requirements.txt` is not created yet, install directly:*
-
-```bash
-pip install flask cryptography numpy pillow
-
-```
 
 
 ---
 
-### **3. Execution Commands**
+## 3. Key Management & Safe Instructions for Verification
 
-#### **A. Running the Web Application (Flask GUI)**
+* **Public Key Location:** Generated public keys are automatically saved under `keys/public_key.pem` and `keys/public_key_test.pem`.
+
+
+* **Private Key Security Notice:** As per assignment requirements, private keys are generated dynamically in memory for local demo purposes only and are never hardcoded or committed to version control.
+
+
+* **How to Reproduce Signature Verification:**
+1. Use the provided public key (`keys/public_key.pem`) in the web interface or CLI.
+
+
+2. Load the stego file (`stego_sample.png` or `stego_sample.wav`).
+
+
+3. Ensure the LSB bit setting and start offset match the protection configuration (e.g., LSB=2, Offset=500 for images; LSB=2, Offset=4096 for audio).
+
+
+4. Execute verification; the system will unpack the RSA-PSS signature and verify it against the public key.
+
+
+
+
+
+---
+
+## 4. Execution Commands
+
+### A. Web GUI Application (Flask)
 
 * **Windows (PowerShell):**
 ```powershell
 $env:PORT="5050"; py app.py
-
-```
-
-
-* **Windows (Command Prompt):**
-```cmd
-set PORT=5050 && py app.py
 
 ```
 
@@ -85,70 +95,34 @@ PORT=5050 python3 app.py
 
 
 
-> Access the web interface at **`[http://127.0.0.1:5050](http://127.0.0.1:5050)`**.
+> Web Interface: `http://127.0.0.1:5050`
 
----
+### B. Standalone Audio Tkinter GUI
 
-#### **B. Running the Standalone Audio Tkinter GUI**
-
-* **Windows:**
-```cmd
+```bash
 py src/audio_gui_simple.py
 
 ```
 
+### C. Image Steganography Test Suite
 
-* **macOS / Linux:**
 ```bash
-python3 src/audio_gui_simple.py
-
-```
-
-
-
----
-
-#### **C. Running Image Steganography Tests (`src/image_stego.py`)**
-
-* **Windows:**
-```cmd
 py -m src.image_stego
 
 ```
 
+### D. Audio Steganography Test Suite
 
-* **macOS / Linux:**
 ```bash
-python3 -m src.image_stego
-
-```
-
-
-
----
-
-#### **D. Running Audio Steganography Tests (`src/test_member1_2.py`)**
-
-* **Windows:**
-```cmd
 py src/test_member1_2.py
 
 ```
 
-
-* **macOS / Linux:**
-```bash
-python3 src/test_member1_2.py
-
-```
-
-
-
 ---
 
-### **4. Expected Terminal Outputs**
+## 5. Expected Outputs
 
-#### **Expected Output for `src/image_stego.py**`
+### Image Test Suite Output (`src/image_stego.py`)
 
 ```text
 ==================================================
@@ -178,9 +152,7 @@ Result   : [FAIL] SIGNATURE INVALID (EXPECTED BEHAVIOR)
 
 ```
 
----
-
-#### **Expected Output for `src/test_member1_2.py**`
+### Audio Test Suite Output (`src/test_member1_2.py`)
 
 ```text
 ==================================================
@@ -189,7 +161,7 @@ Result   : [FAIL] SIGNATURE INVALID (EXPECTED BEHAVIOR)
 
 [1] Preparing WAV sample and keys...
     -> Generated WAV sample: sample.wav
-    -> Saved public key to: INF2005-ACW1\keys\public_key_test.pem
+    -> Saved public key to: keys\public_key_test.pem
 
 [2] Creating and signing payload...
     -> Signed package size: 396 bytes
@@ -233,5 +205,9 @@ Case 4: PASS
 Case 5: PASS
 
 Final Result: 5/5 cases passed
+
+```
+
+```
 
 ```
