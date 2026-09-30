@@ -183,31 +183,17 @@ py src/test_member1_2.py
 
 ## 6. Required Test Cases & Verification Evidence
 
-The test suite covers **2 positive cases** and **4 negative cases** across image and audio cover objects:
+The test suite covers 2 positive cases and 4 negative cases across image and audio cover objects:
 
 | Test ID | Media Type | Scenario / Test Description | Expected Result | Result |
-| --- | --- | --- | --- | --- |
-| **IMG-POS-1** | Image (`PNG`) | Valid signature, legitimate public key, correct offset (500), LSB=2
-
- | `[PASS] AUTHENTIC` | **PASS**<br> |
-| **IMG-NEG-1** | Image (`PNG`) | Wrong Public Key verification (Unauthentic sender)
-
- | `[FAIL] SIGNATURE INVALID` | **PASS**<br> |
-| **AUD-POS-1** | Audio (`WAV`) | Valid signature, legitimate public key, offset=4096, LSB=2
-
- | `[PASS] AUTHENTIC` | **PASS**<br> |
-| **AUD-NEG-1** | Audio (`WAV`) | Wrong Public Key verification (Unauthentic sender)
-
- | `[PASS] SIGNATURE INVALID` | **PASS**<br> |
-| **AUD-NEG-2** | Audio (`WAV`) | Wrong Start Location offset extraction
-
- | `[PASS] WRONG START DETECTED` | **PASS**<br> |
-| **AUD-NEG-3** | Audio (`WAV`) | Bit-flip Tampering on stego audio frame byte
-
- | `[PASS] TAMPERING DETECTED` | **PASS**<br> |
-| **CAP-NEG-1** | Audio/Image | Capacity Exceeded (Payload larger than cover capacity)
-
- | `[PASS] CAPACITY LIMIT ENFORCED` | **PASS**<br> |
+| :--- | :--- | :--- | :--- | :--- |
+| **IMG-POS-1** | Image (`PNG`) | Valid signature, legitimate public key, correct offset (500), LSB=2 | `[PASS] AUTHENTIC` | **PASS** |
+| **IMG-NEG-1** | Image (`PNG`) | Wrong Public Key verification (Unauthentic sender) | `[FAIL] SIGNATURE INVALID` | **PASS** |
+| **AUD-POS-1** | Audio (`WAV`) | Valid signature, legitimate public key, offset=4096, LSB=2 | `[PASS] AUTHENTIC` | **PASS** |
+| **AUD-NEG-1** | Audio (`WAV`) | Wrong Public Key verification (Unauthentic sender) | `[PASS] SIGNATURE INVALID` | **PASS** |
+| **AUD-NEG-2** | Audio (`WAV`) | Wrong Start Location offset extraction | `[PASS] WRONG START DETECTED` | **PASS** |
+| **AUD-NEG-3** | Audio (`WAV`) | Bit-flip Tampering on stego audio frame byte | `[PASS] TAMPERING DETECTED` | **PASS** |
+| **CAP-NEG-1** | Audio/Image | Capacity Exceeded (Payload larger than cover capacity) | `[PASS] CAPACITY LIMIT ENFORCED` | **PASS** |
 
 ---
 
