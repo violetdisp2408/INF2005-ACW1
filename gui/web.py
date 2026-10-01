@@ -94,10 +94,11 @@ def home():
 @app.route("/protect", methods=["GET", "POST"])
 def protect():
     form = {"media_id": "", "preset": "short", "text": messages.PRESETS["short"], "nbits": 1, "start": "",
-            "mode": "team-image"}
+            "mode": "team-image", "leave_unchanged": False}
     error = None
     if request.method == "POST":
         form.update({k: request.form.get(k, form[k]) for k in ("media_id", "preset", "text", "mode", "start")})
+        form["leave_unchanged"] = request.form.get("leave_unchanged") == "1"
         job_id = _new_id()
         job_dir = os.path.join(JOBS_DIR, job_id)
         os.makedirs(job_dir, exist_ok=True)
@@ -116,7 +117,8 @@ def protect():
                 if not upload or not upload.filename:
                     raise ValueError("Choose a photo or audio file, or record some audio first.")
                 src = _save_upload(upload, job_dir, "upload")
-            protect_mod.protect(src, job_dir, form["media_id"], form["text"], form["nbits"], start, PRIVATE_KEY)
+            protect_mod.protect(src, job_dir, form["media_id"], form["text"], form["nbits"], start, PRIVATE_KEY,
+                                 leave_unchanged=form["leave_unchanged"])
             if src.startswith(job_dir) and os.path.basename(src).startswith("upload"):
                 os.remove(src)
             return redirect(url_for("result", job_id=job_id))

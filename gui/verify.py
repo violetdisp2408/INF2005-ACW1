@@ -2,7 +2,14 @@
 
 import json
 
-from src.crypto_engine import compute_file_hash, unpack_payload_package, verify_media_integrity, verify_signature
+from src.crypto_engine import (
+    compute_audio_frame_hash,
+    compute_file_hash,
+    compute_image_pixel_hash,
+    unpack_payload_package,
+    verify_media_integrity,
+    verify_signature,
+)
 
 from . import media as M
 from . import safe_run
@@ -72,7 +79,21 @@ def verify(stego_path: str, public_key, nbits: int, start: int) -> dict:
     if not verify_media_integrity(stego_path, payload["file_hash"]):
         return fail(2, "Tampered", f"verify_media_integrity() says no: this file's hash is {actual[:12]}…, "
                                    f"the note has {payload['file_hash'][:12]}….")
-    ok(2, f"verify_media_integrity() says yes: hash {actual[:12]}… matches.")
+    if actual == payload["file_hash"]:
+        ok(2, f"verify_media_integrity() says yes: hash {actual[:12]}… matches.")
+    else:
+        picture = compute_image_pixel_hash(stego_path) or ""
+        audio = compute_audio_frame_hash(stego_path) or ""
+        if picture and picture == payload["file_hash"]:
+            out["info"]["picture_hash"] = picture
+            ok(2, "verify_media_integrity() says yes: the photo was not edited, "
+                  f"so the picture hash {picture[:12]}… matches the note.")
+        elif audio and audio == payload["file_hash"]:
+            out["info"]["audio_hash"] = audio
+            ok(2, "verify_media_integrity() says yes: the audio was not edited, "
+                  f"so the sound hash {audio[:12]}… matches the note.")
+        else:
+            ok(2, "verify_media_integrity() says yes.")
 
     out["verdict"], out["explanation"] = "Authentic", EXPLAIN["Authentic"]
     return out

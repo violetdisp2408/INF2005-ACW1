@@ -58,6 +58,20 @@ def test_image_note_reads_back_and_signature_passes():
     assert v["payload"]["media_id"] == "IMG" and v["payload"]["metadata"] == message.PRESETS["short"]
 
 
+def test_unchanged_audio_stays_identical_and_authentic():
+    job = os.path.join(TMP, "aud-same")
+    r = protect(MP3, job, "AUD_SAME", message.PRESETS["short"], 1, 20000, PRIV, leave_unchanged=True)
+    stego = os.path.join(job, r["stego_file"])
+    cover = os.path.join(job, r["cover_file"])
+    import wave
+    with wave.open(cover, "rb") as src, wave.open(stego, "rb") as dst:
+        assert src.readframes(src.getnframes()) == dst.readframes(dst.getnframes())
+    v = verify(stego, PUB, 1, 20000)
+    assert v["verdict"] == "Authentic", v
+    assert v["payload"]["metadata"] == message.PRESETS["short"]
+    assert verify(stego, PUB, 2, 20000)["verdict"] == NOT_FOUND
+
+
 def test_audio_from_mp3_long_message_reads_back():
     _, r, stego = _protect("aud", MP3, 1, 20000, "long")
     assert stego.endswith(".wav")

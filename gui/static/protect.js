@@ -153,6 +153,15 @@
     $("#nbitsOut").textContent = nbits;
     const meter = $("#capMeter"), label = $("#capText");
     const start = Math.max(0, +$("#start").value || 0);
+    if ($("#leave_unchanged").checked) {
+      const kind = isImage(modeSelect.value) ? "photo" : "audio";
+      const unitsName = isImage(modeSelect.value) ? "pixels" : "samples";
+      meter.firstElementChild.style.width = "0";
+      meter.classList.remove("full");
+      label.innerHTML = `the ${kind} will not be edited, so the note always fits ` + '<span class="tag ok">unchanged</span>';
+      $("#startHint").textContent = `The ${unitsName} are not used. Person B still types this start position and the LSB count on Verify, so tell B those two numbers separately.`;
+      return;
+    }
     if (units === null) {
       meter.firstElementChild.style.width = "0";
       meter.classList.remove("full");
@@ -178,6 +187,7 @@
     update();
   });
   ["#nbits", "#start", "#media_id"].forEach((s) => $(s).addEventListener("input", update));
+  $("#leave_unchanged").addEventListener("change", update);
 
   $("#protectForm").addEventListener("submit", (e) => {
     if (!isTeam(modeSelect.value) && !input.files.length) {

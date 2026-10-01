@@ -74,7 +74,9 @@
     <tr><td class="k">Protected at</td><td class="ts" data-ts="{{ p.timestamp }}">{{ p.timestamp }}</td></tr>
     <tr><td class="k">Nonce</td><td class="mono">{{ p.nonce }}</td></tr>
     <tr><td class="k">Hash in note</td><td class="mono">{{ p.file_hash }}</td></tr>
-    {% if result.info.actual_hash %}<tr><td class="k">Hash of this file</td><td class="mono">{{ result.info.actual_hash }} {{ '(same)' if result.info.actual_hash == p.file_hash else '(different)' }}</td></tr>{% endif %}
+    {% if result.info.picture_hash %}<tr><td class="k">Hash of the photo</td><td class="mono">{{ result.info.picture_hash }} (same, the picture was not edited)</td></tr>
+    {% elif result.info.audio_hash %}<tr><td class="k">Hash of the sound</td><td class="mono">{{ result.info.audio_hash }} (same, the audio was not edited)</td></tr>
+    {% elif result.info.actual_hash %}<tr><td class="k">Hash of this file</td><td class="mono">{{ result.info.actual_hash }} {{ '(same)' if result.info.actual_hash == p.file_hash else '(different)' }}</td></tr>{% endif %}
     <tr><td class="k">Message</td><td>{{ p.metadata }}</td></tr>
   </table></div>
 </div>
