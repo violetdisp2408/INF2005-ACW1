@@ -87,16 +87,16 @@
   <div class="card">
     <h3>Send to person B</h3>
     <p class="what">Download these and email them to B (the spec's "A sends to B" step).</p>
-    <div class="alert note" style="margin:0 0 10px">Tell B separately (not in the email): <b>{{ r.nbits }} LSB{{ 's' if r.nbits > 1 }}</b>, start at <b>{{ r.start_unit }} {{ r.start }}</b>.</div>
+    <div class="alert note" style="margin:0 0 10px">Tell B separately (not in the email): <b>{{ r.nbits }} LSB{{ 's' if r.nbits > 1 }}</b>, start at <b>{{ r.start_unit }} {{ r.start }}</b>{% if r.encrypted %}, and the message password{% endif %}.</div>
     <table>
       <tr><td class="k">File ID</td><td>{{ r.media_id }}</td></tr>
       <tr><td class="k">File</td><td>{{ r.describe }}</td></tr>
       <tr><td class="k">LSBs used</td><td>{{ r.nbits }}</td></tr>
       <tr><td class="k">Start</td><td>{{ r.start_unit }} {{ '{:,}'.format(r.start) }}</td></tr>
-      <tr><td class="k">Message</td><td>{{ r.message_chars }} characters</td></tr>
+      <tr><td class="k">Message</td><td>{{ r.message_chars }} characters{% if r.encrypted %}, encrypted with a password (tell B separately){% endif %}</td></tr>
       <tr><td class="k">Note size</td><td>{{ r.package_len }} bytes, including a {{ r.signature_len }}-byte signature</td></tr>
       <tr><td class="k">Space used</td><td>{{ '{:,}'.format(r.needed_bits) }} of {{ '{:,}'.format(r.available_bits) }} bits ({{ '%.1f'|format(100 * r.needed_bits / r.available_bits) }}%)</td></tr>
-      <tr><td class="k">Hash in note</td><td class="mono">{{ r.file_hash[:16] }}…</td></tr>
+      <tr><td class="k">Hash in note</td><td><span class="mono">{{ r.file_hash[:16] }}…</span><br><span class="small">of the cover with the note's LSBs set to 0, so B gets the same hash from the protected file</span></td></tr>
       <tr><td class="k">Key ID</td><td class="mono">{{ key_id }}</td></tr>
     </table>
     <div class="row" style="margin-top:14px">

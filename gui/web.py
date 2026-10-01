@@ -25,6 +25,7 @@ JOBS_DIR = os.path.join(app.instance_path, "jobs")
 CHECKS_DIR = os.path.join(app.instance_path, "checks")
 EVIDENCE_DIR = os.path.join(ROOT, "evidence")
 ID_RE = re.compile(r"^[a-f0-9]{10}$")
+ATTACK_FILE = re.compile(r"^[a-z]+(-view|-zoom|-wave)?\.(png|wav)$")
 SERVABLE = re.compile(r"^(cover|protected|preview-[a-z]+)\.(png|wav)$|^received\.(png|wav|bmp|tif|tiff)$")
 
 PRIVATE_KEY, PUBLIC_KEY = keys.load_pair()
@@ -116,7 +117,8 @@ def protect():
                 if not upload or not upload.filename:
                     raise ValueError("Choose a photo or audio file, or record some audio first.")
                 src = _save_upload(upload, job_dir, "upload")
-            protect_mod.protect(src, job_dir, form["media_id"], form["text"], form["nbits"], start, PRIVATE_KEY)
+            protect_mod.protect(src, job_dir, form["media_id"], form["text"], form["nbits"], start, PRIVATE_KEY,
+                                password=request.form.get("password", ""))
             if src.startswith(job_dir) and os.path.basename(src).startswith("upload"):
                 os.remove(src)
             return redirect(url_for("result", job_id=job_id))
@@ -148,6 +150,14 @@ def job_file(job_id, name):
     if not SERVABLE.match(name):
         abort(404)
     return send_from_directory(_job_dir(JOBS_DIR, job_id), name)
+
+
+@app.route("/jobs/<job_id>/attacks/<name>")
+def attack_file(job_id, name):
+    if not ATTACK_FILE.match(name):
+        abort(404)
+    return send_from_directory(os.path.join(_job_dir(JOBS_DIR, job_id), "attacks"), name,
+                               as_attachment=request.args.get("dl") == "1")
 
 
 @app.route("/jobs/<job_id>/download/<what>")
@@ -216,6 +226,8 @@ def verify():
             except ValueError:
                 raise ValueError("Enter the LSB count and start position the sender gave you.") from None
             result = verify_mod.verify(stego_path, pub, nbits, start)
+            if result["payload"]:
+                result["message"] = verify_mod.read_message(result["payload"], request.form.get("password", ""))
             result["key_id"] = keys.fingerprint(pub)
             result["received"] = os.path.basename(stego_path)
             result["kind"] = media.kind_of(stego_path)
@@ -246,7 +258,7 @@ def attack():
         except (ValueError, media.MediaError) as exc:
             error = str(exc)
     return render_template("attack.html", page="attack", jobs=jobs, chosen=chosen or (jobs[0]["id"] if jobs else ""),
-                           report=report, error=error, attack_list=attacks.ATTACKS)
+                           report=report, error=error, attack_list=attacks.ATTACKS, job_id=chosen)
 
 
 @app.errorhandler(413)
