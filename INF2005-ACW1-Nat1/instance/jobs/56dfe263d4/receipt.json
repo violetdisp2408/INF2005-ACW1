@@ -1,0 +1,19 @@
+{
+  "media_id": "MEDIA_001",
+  "kind": "image",
+  "describe": "828\u00d7957 image",
+  "nbits": 1,
+  "start": 191750,
+  "start_unit": "pixel",
+  "package_len": 436,
+  "signature_len": 256,
+  "needed_bits": 3520,
+  "available_bits": 1801938,
+  "file_hash": "9538b0f309591ec6e9232d88c7e25496d29c39434e806a11d7cad91b62a38585",
+  "timestamp": 1790783207,
+  "message_chars": 0,
+  "notes": [],
+  "cover_file": "cover.png",
+  "stego_file": "protected.png",
+  "created": "2026-09-30T15:46:47+00:00"
+}
