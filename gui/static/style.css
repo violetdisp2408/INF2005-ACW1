@@ -103,3 +103,15 @@ h3.section { margin: 4px 0 10px; font-size: 17px; }
 table.bits mark { background: var(--warn-soft); color: var(--warn); padding: 0 1px; }
 table.bits mark.new { background: var(--bad-soft); color: var(--bad); font-weight: bold; }
 .radios.stack { flex-direction: column; gap: 6px; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 0 4px; }
+details.attack { margin-top: 12px; }
+details.attack > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+details.attack > summary::-webkit-details-marker { display: none; }
+details.attack > summary::before { content: "▸"; color: var(--muted); width: 12px; }
+details.attack[open] > summary::before { content: "▾"; }
+details.attack[open] > summary { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+details.attack h4 { margin: 14px 0 6px; font-size: 14px; }
+details.attack .grid > div > h4:first-child { margin-top: 0; }
+.mono.peek { margin-top: 4px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); white-space: pre-wrap; }
+table.bits td.mono { white-space: nowrap; word-break: normal; }

@@ -1,18 +1,18 @@
 """Verify: runs the team's checks in order and maps the result to a verdict."""
 
 import json
+import os
+import tempfile
 
 from src.crypto_engine import (
-    compute_audio_frame_hash,
     compute_file_hash,
-    compute_image_pixel_hash,
     unpack_payload_package,
     verify_media_integrity,
     verify_signature,
 )
 
 from . import media as M
-from . import safe_run
+from . import safe_run, secret, stable
 
 NOT_FOUND = "Wrong Start Location / Payload Missing"
 STEPS = [
@@ -73,27 +73,30 @@ def verify(stego_path: str, public_key, nbits: int, start: int) -> dict:
         return fail(1, "Signature Invalid", "verify_signature() says no for this public key.")
     ok(1, "verify_signature() says yes for this public key.")
 
-    # 3. check the file hash
-    actual = compute_file_hash(stego_path)
+    # 3. check the file hash, on the same stable copy Protect hashed (see stable.py)
+    with tempfile.TemporaryDirectory(prefix="acw1-verify-") as tmp:
+        stable_path = stable.stable_copy(stego_path, os.path.join(tmp, "stable" + os.path.splitext(stego_path)[1]),
+                                         start, nbits, len(raw))
+        actual = compute_file_hash(stable_path)
+        same = verify_media_integrity(stable_path, payload["file_hash"])
     out["info"]["actual_hash"] = actual
-    if not verify_media_integrity(stego_path, payload["file_hash"]):
+    if not same:
         return fail(2, "Tampered", f"verify_media_integrity() says no: this file's hash is {actual[:12]}…, "
                                    f"the note has {payload['file_hash'][:12]}….")
-    if actual == payload["file_hash"]:
-        ok(2, f"verify_media_integrity() says yes: hash {actual[:12]}… matches.")
-    else:
-        picture = compute_image_pixel_hash(stego_path) or ""
-        audio = compute_audio_frame_hash(stego_path) or ""
-        if picture and picture == payload["file_hash"]:
-            out["info"]["picture_hash"] = picture
-            ok(2, "verify_media_integrity() says yes: the photo was not edited, "
-                  f"so the picture hash {picture[:12]}… matches the note.")
-        elif audio and audio == payload["file_hash"]:
-            out["info"]["audio_hash"] = audio
-            ok(2, "verify_media_integrity() says yes: the audio was not edited, "
-                  f"so the sound hash {audio[:12]}… matches the note.")
-        else:
-            ok(2, "verify_media_integrity() says yes.")
+    ok(2, f"verify_media_integrity() says yes: hash {actual[:12]}… matches (note's LSBs set to 0 first).")
 
     out["verdict"], out["explanation"] = "Authentic", EXPLAIN["Authentic"]
     return out
+
+
+def read_message(payload: dict, password: str) -> dict:
+    """Decrypts a password-locked message for display. Doesn't change the verdict."""
+    text = payload.get("metadata")
+    if not secret.is_locked(text):
+        return {"locked": False, "text": text}
+    if not password:
+        return {"locked": True, "text": None, "error": "This message is locked. Enter the password to read it."}
+    try:
+        return {"locked": True, "text": secret.unlock(text, password)}
+    except ValueError as exc:
+        return {"locked": True, "text": None, "error": str(exc)}

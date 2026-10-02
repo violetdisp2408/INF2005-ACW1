@@ -12,9 +12,9 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from gui import attacks, messages as message  # noqa: E402
+from gui import attacks, media as M, messages as message, secret  # noqa: E402
 from gui.protect import protect  # noqa: E402
-from gui.verify import NOT_FOUND, verify  # noqa: E402
+from gui.verify import NOT_FOUND, read_message, verify  # noqa: E402
 from src.crypto_engine import generate_key_pair  # noqa: E402
 
 if __name__ != "__main__" and "pytest" not in sys.modules:
@@ -84,15 +84,31 @@ def test_every_lsb_count_reads_back():
     for cover, start in ((JPG, 300), (MP3, 4096)):
         for n in range(1, 9):
             _, _, stego = _protect(f"n{n}-{os.path.basename(cover)}", cover, n, start)
-            assert verify(stego, PUB, n, start)["steps"][1]["status"] == "pass", (cover, n)
+            assert verify(stego, PUB, n, start)["verdict"] == "Authentic", (cover, n)
 
 
-def test_hash_step_reports_what_m1_returns():
-    """Checks the hash step reports what verify_media_integrity returns."""
-    _, _, stego = _protect("hash", JPG, 1, 777)
-    v = verify(stego, PUB, 1, 777)
-    print(f"      genuine file → {v['verdict']}")
-    assert v["verdict"] in ("Authentic", "Tampered")
+def test_genuine_files_are_authentic_and_edits_are_tampered():
+    """The hash is of the file with the note's LSBs set to 0, so only real edits change it."""
+    for name, cover, n, start in (("hash-img", JPG, 1, 777), ("hash-aud", MP3, 2, 3000)):
+        job, r, stego = _protect(name, cover, n, start)
+        assert verify(stego, PUB, n, start)["verdict"] == "Authentic", name
+        media = M.load(stego)
+        units = media.units.copy()
+        units[-1] ^= 1  # one bit outside the note
+        edited = M.save_units(media, units, os.path.join(job, "edited" + os.path.splitext(stego)[1]))
+        assert verify(edited, PUB, n, start)["verdict"] == "Tampered", name
+
+
+def test_password_keeps_the_message_secret():
+    job = os.path.join(TMP, "pw")
+    r = protect(JPG, job, "PW", "meet at 3pm", 1, 900, PRIV, password="hunter2")
+    stego = os.path.join(job, r["stego_file"])
+    v = verify(stego, PUB, 1, 900)
+    assert v["verdict"] == "Authentic"
+    assert "meet at 3pm" not in v["payload"]["metadata"] and secret.is_locked(v["payload"]["metadata"])
+    assert read_message(v["payload"], "hunter2")["text"] == "meet at 3pm"
+    assert read_message(v["payload"], "wrong")["text"] is None
+    assert read_message(v["payload"], "")["text"] is None
 
 
 # failures map to the spec's verdicts
@@ -136,6 +152,7 @@ def test_attack_suite_gives_expected_verdicts():
         job, _, _ = _protect(name, cover, n, start)
         report = attacks.run_all(job, PUB, os.path.join(TMP, "evidence"))
         print(f"      {name}: untouched file → {report['baseline']}; {report['passed']}/{len(report['rows'])} as expected")
+        assert report["baseline"] == "Authentic", report["baseline"]
         assert report["passed"] == len(attacks.ATTACKS), [r for r in report["rows"] if not r["ok"]]
 
 
@@ -160,7 +177,23 @@ def test_flask_pages_end_to_end():
     assert c.get(f"/jobs/{job}/download/bundle").status_code == 200
     r = c.post("/verify", data={"job": job, "key_source": "server", "nbits": "2", "start": "4321"},
                content_type="multipart/form-data")
-    assert b"verify_signature() says yes" in r.data
+    assert b"verify_signature() says yes" in r.data and b"Authentic" in r.data
+    r = c.post("/protect", data={"mode": "team-audio", "media_id": "SECRET", "preset": "custom", "text": "top secret",
+                                 "nbits": "1", "start": "500", "password": "pw123"}, content_type="multipart/form-data")
+    assert r.status_code == 302, r.data[:500]
+    job = r.headers["Location"].rsplit("/", 1)[1]
+    assert b"encrypted with a password" in c.get(f"/result/{job}").data
+    r = c.post("/verify", data={"job": job, "key_source": "server", "nbits": "1", "start": "500", "password": "pw123"},
+               content_type="multipart/form-data")
+    assert b"top secret" in r.data and b"decrypted with the password" in r.data
+    r = c.post("/verify", data={"job": job, "key_source": "server", "nbits": "1", "start": "500"},
+               content_type="multipart/form-data")
+    assert b"top secret" not in r.data and b"locked" in r.data
+    r = c.post("/attack", data={"job": job})
+    assert r.status_code == 200 and b"What happened in each attack" in r.data and b"8/8" in r.data
+    for name in ("edit-wave.png", "edit.wav", "sigbit-wave.png"):
+        assert c.get(f"/jobs/{job}/attacks/{name}").status_code == 200, name
+    assert c.get(f"/jobs/{job}/attacks/..%2Freceipt.json").status_code == 404
 
 
 if __name__ == "__main__":

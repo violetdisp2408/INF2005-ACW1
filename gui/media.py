@@ -141,3 +141,17 @@ def max_start(media: Media, n_bytes: int, nbits: int) -> int:
     """Returns the largest start position where n_bytes still fits."""
     free_units = media.unit_count - units_for(n_bytes, nbits)
     return free_units // media.units_per_step
+
+
+def save_units(media: Media, units: np.ndarray, out_path: str) -> str:
+    """Saves values back as a PNG or WAV with the same size/format as media."""
+    if media.kind == "image":
+        arr = units.reshape(media.meta["height"], media.meta["width"], 3)
+        Image.fromarray(arr, mode="RGB").save(out_path, format="PNG", compress_level=1)
+    else:
+        with wave.open(media.path, "rb") as src:
+            params = src.getparams()
+        with wave.open(out_path, "wb") as dst:
+            dst.setparams(params)
+            dst.writeframes(units.tobytes())
+    return out_path
