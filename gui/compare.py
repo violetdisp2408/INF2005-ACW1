@@ -113,6 +113,7 @@ def audio_views(job_dir: str, r: dict) -> dict:
     edges = np.linspace(0, a.size, buckets + 1).astype(int)
     env = [[float(a[edges[i]:edges[i + 1]].min()), float(a[edges[i]:edges[i + 1]].max())] for i in range(buckets)]
     first, end = _note_units(r, 1)
+    regions = [] if r.get("unchanged") else [[first // bps / a.size, end // bps / a.size]]
     zs = first // bps
     zoom = slice(zs, min(a.size, zs + 160))
     noise = float(np.sum((a.astype(np.float64) - b) ** 2))
@@ -120,7 +121,7 @@ def audio_views(job_dir: str, r: dict) -> dict:
         "bits": bit_rows(cover, stego, first, r["nbits"]),
         **_summary(cover.units, stego.units, r["nbits"]),
         "envelope": env,
-        "regions": [[first // bps / a.size, end // bps / a.size]],
+        "regions": regions,
         "zoom_start_s": zs / cover.meta["rate"],
         "zoom_cover": [round(float(x), 5) for x in a[zoom]],
         "zoom_stego": [round(float(x), 5) for x in b[zoom]],

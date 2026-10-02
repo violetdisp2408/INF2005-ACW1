@@ -1,0 +1,20 @@
+{
+  "media_id": "MEDIA_001",
+  "kind": "audio",
+  "describe": "3.0 s WAV, 1 ch, 44100 Hz, 16-bit",
+  "nbits": 1,
+  "start": 217298,
+  "start_unit": "byte",
+  "package_len": 1108,
+  "signature_len": 256,
+  "needed_bits": 8896,
+  "available_bits": 47302,
+  "file_hash": "fd442d2912cf62344e1a473a0b773dd011ac1b959ff92260a6bb6338a7a32a55",
+  "timestamp": 1790832409,
+  "message_chars": 672,
+  "notes": [],
+  "cover_file": "cover.wav",
+  "stego_file": "protected.wav",
+  "unchanged": false,
+  "created": "2026-10-01T05:26:49+00:00"
+}

@@ -13,13 +13,19 @@
   <div class="stat"><b>{{ '{:,}'.format(v.changed_pixels if r.kind == 'image' else v.changed_samples) }}</b>
     <span>{{ 'pixels' if r.kind == 'image' else 'samples' }} changed{% if r.kind == 'image' %} of {{ '{:,}'.format(v.size[0] * v.size[1]) }} ({{ '%.2f'|format(v.changed_pct) }}%){% else %} in {{ '%.1f'|format(v.seconds) }} s{% endif %}</span></div>
   <div class="stat"><b>±{{ v.biggest_change }}</b>
-    <span>biggest change to any single value (0–255). With {{ r.nbits }} LSB{{ 's' if r.nbits > 1 }} it can never be more than ±{{ v.max_possible }}</span></div>
+    <span>{% if r.unchanged %}biggest change to any {{ 'pixel' if r.kind == 'image' else 'sample' }}. Nothing was edited.{% else %}biggest change to any single value (0–255). With {{ r.nbits }} LSB{{ 's' if r.nbits > 1 }} it can never be more than ±{{ v.max_possible }}{% endif %}</span></div>
   {% if r.kind == 'image' %}
   <div class="stat"><b>{{ '%.1f'|format(v.psnr) if v.psnr else '∞' }} dB</b><span>PSNR. Above about 40 dB the eye can't tell the difference</span></div>
   {% else %}
-  <div class="stat"><b>{{ '%.1f'|format(v.snr) if v.snr else '∞' }} dB</b><span>SNR: how much louder the sound is than the noise the note added</span></div>
+  <div class="stat"><b>{{ '%.1f'|format(v.snr) if v.snr else '∞' }} dB</b><span>{% if r.unchanged %}SNR is infinite because the protected audio is identical{% else %}SNR: how much louder the sound is than the noise the note added{% endif %}</span></div>
   {% endif %}
+  {% if r.unchanged and r.kind == 'image' %}
+  <div class="stat"><b>0</b><span>pixels used to hide the note. It is stored in the PNG file, so the picture stays identical</span></div>
+  {% elif r.unchanged %}
+  <div class="stat"><b>0</b><span>samples used to hide the note. It is stored in the WAV file, so the sound stays identical</span></div>
+  {% else %}
   <div class="stat"><b>{{ '%.1f'|format(100 * r.needed_bits / r.available_bits) }}%</b><span>of the space after the start position used ({{ '{:,}'.format(r.needed_bits) }} bits)</span></div>
+  {% endif %}
 </div>
 
 <div class="grid">
@@ -29,7 +35,7 @@
     <img class="view" src="{{ url_for('job_file', job_id=job_id, name='preview-cover.png') }}" alt="original">
   </div>
   <div class="card">
-    <h3>Protected (note hidden inside)</h3>
+    <h3>{{ 'Protected (photo not edited)' if r.unchanged else 'Protected (note hidden inside)' }}</h3>
     <img class="view" src="{{ url_for('job_file', job_id=job_id, name='preview-stego.png') }}" alt="protected">
   </div>
   <div class="card">
@@ -53,7 +59,7 @@
   </div>
   <div class="card">
     <h3>Where the note is</h3>
-    <p class="what">The whole clip. The shaded strip is where the note is hidden, from byte {{ '{:,}'.format(r.start) }}.</p>
+    <p class="what">{% if r.unchanged %}The whole clip. No samples were changed, so there is no shaded strip: the note is stored in the WAV file, not in the sound.{% else %}The whole clip. The shaded strip is where the note is hidden, from byte {{ '{:,}'.format(r.start) }}.{% endif %}</p>
     <canvas id="env" width="600" height="120"></canvas>
   </div>
 {% endif %}
@@ -61,15 +67,20 @@
 {% if r.kind == 'audio' %}
 <div class="card" style="margin-top:16px">
   <h3>Zoomed in at the start of the note</h3>
-  <p class="what">160 samples from {{ '%.3f'|format(v.zoom_start_s) }} s. Where the two lines split, that sample was changed.</p>
+  <p class="what">{% if r.unchanged %}160 samples from {{ '%.3f'|format(v.zoom_start_s) }} s. The two lines sit on top of each other because nothing was changed.{% else %}160 samples from {{ '%.3f'|format(v.zoom_start_s) }} s. Where the two lines split, that sample was changed.{% endif %}</p>
   <canvas id="zoom" width="900" height="170"></canvas>
   <div class="legend"><span><i style="background:var(--cover)"></i>original</span><span><i style="background:var(--stego)"></i>protected</span></div>
 </div>
 {% endif %}
 
 <div class="card" style="margin-top:16px">
+  {% if r.unchanged %}
+  <h3>Bit by bit: nothing was written into the {{ 'pixels' if r.kind == 'image' else 'samples' }}</h3>
+  <p class="what">These are the first {{ v.bits|length }} values at the start position. Before and after are the same, because the note was stored in the file instead of in the {{ 'picture' if r.kind == 'image' else 'sound' }}.</p>
+  {% else %}
   <h3>Bit by bit: the first {{ v.bits|length }} values the note was written into</h3>
   <p class="what">LSB replacement only swaps the last {{ r.nbits }} bit{{ 's' if r.nbits > 1 }} (highlighted) of each value for the note's bits. The first {{ 8 - r.nbits }} bits are never touched. The first 32 bits written are the note's length (added by the {{ r.kind }} code), then the signed note itself.</p>
+  {% endif %}
   <div class="overflow"><table class="bits">
     <tr><th>Where</th><th>Before</th><th>After</th><th>Change</th></tr>
     {% for b in v.bits %}
@@ -95,7 +106,11 @@
       <tr><td class="k">Start</td><td>{{ r.start_unit }} {{ '{:,}'.format(r.start) }}</td></tr>
       <tr><td class="k">Message</td><td>{{ r.message_chars }} characters{% if r.encrypted %}, encrypted with a password (tell B separately){% endif %}</td></tr>
       <tr><td class="k">Note size</td><td>{{ r.package_len }} bytes, including a {{ r.signature_len }}-byte signature</td></tr>
+      {% if r.unchanged %}
+      <tr><td class="k">How the note is stored</td><td>In the {{ 'PNG' if r.kind == 'image' else 'WAV' }} file, not in the {{ 'pixels' if r.kind == 'image' else 'samples' }}</td></tr>
+      {% else %}
       <tr><td class="k">Space used</td><td>{{ '{:,}'.format(r.needed_bits) }} of {{ '{:,}'.format(r.available_bits) }} bits ({{ '%.1f'|format(100 * r.needed_bits / r.available_bits) }}%)</td></tr>
+      {% endif %}
       <tr><td class="k">Hash in note</td><td><span class="mono">{{ r.file_hash[:16] }}…</span><br><span class="small">of the cover with the note's LSBs set to 0, so B gets the same hash from the protected file</span></td></tr>
       <tr><td class="k">Key ID</td><td class="mono">{{ key_id }}</td></tr>
     </table>

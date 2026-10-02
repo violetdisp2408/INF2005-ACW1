@@ -1,0 +1,22 @@
+{
+  "media_id": "MEDIA_001",
+  "kind": "audio",
+  "describe": "3.8 s WAV, 1 ch, 48000 Hz, 16-bit",
+  "nbits": 5,
+  "start": 296619,
+  "start_unit": "byte",
+  "package_len": 541,
+  "signature_len": 256,
+  "needed_bits": 4360,
+  "available_bits": 319145,
+  "file_hash": "3805979ed0c9970bb24846f2c65b1bd99229aa97d6d9082d32a1bf007da05257",
+  "timestamp": 1790832713,
+  "message_chars": 105,
+  "notes": [
+    "The audio was not edited: every sample is the same as the original. The note is stored in the WAV file, so Verify reports Authentic."
+  ],
+  "cover_file": "cover.wav",
+  "stego_file": "protected.wav",
+  "unchanged": true,
+  "created": "2026-10-01T05:31:53+00:00"
+}

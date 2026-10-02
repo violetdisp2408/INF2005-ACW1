@@ -4,7 +4,12 @@ import json
 import os
 import tempfile
 
-from src.crypto_engine import compute_file_hash, unpack_payload_package, verify_media_integrity, verify_signature
+from src.crypto_engine import (
+    compute_file_hash,
+    unpack_payload_package,
+    verify_media_integrity,
+    verify_signature,
+)
 
 from . import media as M
 from . import safe_run, secret, stable

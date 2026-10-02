@@ -144,7 +144,7 @@
     let n = enc.encode(JSON.stringify(m)).length - 2;
     if (/[^\x00-\x7f]/.test(m)) n = JSON.stringify(m).length * 3;
     // with a password the note holds "ENC1:" + base64(salt, nonce, ciphertext, tag), see gui/secret.py
-    if ($("#password").value) n = 5 + 4 * Math.ceil((16 + 12 + enc.encode(m).length + 16) / 3);
+    if ($("#password")?.value) n = 5 + 4 * Math.ceil((16 + 12 + enc.encode(m).length + 16) / 3);
     return cfg.baseRecord + n + enc.encode($("#media_id").value || "MEDIA_001").length;
   }
   const neededUnits = (nbits) => Math.ceil((32 + 8 * noteBytes()) / nbits);
@@ -155,6 +155,16 @@
     $("#nbitsOut").textContent = nbits;
     const meter = $("#capMeter"), label = $("#capText");
     const start = Math.max(0, +$("#start").value || 0);
+    const leaveUnchangedEl = $("#leave_unchanged");
+    if (leaveUnchangedEl && leaveUnchangedEl.checked) {
+      const kind = isImage(modeSelect.value) ? "photo" : "audio";
+      const unitsName = isImage(modeSelect.value) ? "pixels" : "samples";
+      meter.firstElementChild.style.width = "0";
+      meter.classList.remove("full");
+      label.innerHTML = `the ${kind} will not be edited, so the note always fits ` + '<span class="tag ok">unchanged</span>';
+      $("#startHint").textContent = `The ${unitsName} are not used. Person B still types this start position and the LSB count on Verify, so tell B those two numbers separately.`;
+      return;
+    }
     if (units === null) {
       meter.firstElementChild.style.width = "0";
       meter.classList.remove("full");
@@ -179,7 +189,13 @@
     $("#start").value = 1 + Math.floor(Math.random() * hi);
     update();
   });
-  ["#nbits", "#start", "#media_id", "#password"].forEach((s) => $(s).addEventListener("input", update));
+
+  ["#nbits", "#start", "#media_id", "#password"].forEach((s) => {
+    const el = $(s);
+    if (el) el.addEventListener("input", update);
+  });
+  const leaveUnchangedEl = $("#leave_unchanged");
+  if (leaveUnchangedEl) leaveUnchangedEl.addEventListener("change", update);
 
   $("#protectForm").addEventListener("submit", (e) => {
     if (!isTeam(modeSelect.value) && !input.files.length) {

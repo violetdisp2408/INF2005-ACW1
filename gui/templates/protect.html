@@ -70,6 +70,13 @@
     <input type="password" name="password" id="password" autocomplete="new-password" placeholder="leave empty to hide the message as plain text">
     <p class="hint">Keeps the message secret: it's encrypted (AES-256-GCM) before it goes into the note, so someone who finds the note can't read it without this password. The signature still covers it. Tell B the password separately, like the start position.</p>
 
+    <div id="unchangedBox">
+      <div class="radios">
+        <label><input type="checkbox" name="leave_unchanged" id="leave_unchanged" value="1" {{ 'checked' if form.leave_unchanged }}> Don't edit the photo or the audio</label>
+      </div>
+      <p class="hint">Leaves every pixel or sample exactly as it is. The note is stored in the file instead of in the picture or the sound, so nothing visible or audible changes and Verify says Authentic. Person B still needs the LSB count and start position below.</p>
+    </div>
+
     <label for="nbits">Number of LSBs to use: <span id="nbitsOut">{{ form.nbits }}</span></label>
     <input type="range" min="1" max="8" name="nbits" id="nbits" value="{{ form.nbits }}" style="width:100%">
     <p class="hint">How many of the lowest bits in each pixel/sample get replaced. 1 is the hardest to notice. 8 fits the most but visibly damages the file.</p>

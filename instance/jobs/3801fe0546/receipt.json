@@ -1,0 +1,22 @@
+{
+  "media_id": "MEDIA_001",
+  "kind": "image",
+  "describe": "787\u00d7444 image",
+  "nbits": 1,
+  "start": 263302,
+  "start_unit": "pixel",
+  "package_len": 541,
+  "signature_len": 256,
+  "needed_bits": 4360,
+  "available_bits": 258378,
+  "file_hash": "a81baffa0d513f7b6e2fab48058605b07876ce7a6ee09b3ce5fb9837816b9957",
+  "timestamp": 1790832682,
+  "message_chars": 105,
+  "notes": [
+    "The photo was not edited: every pixel is the same as the original. The note is stored in the PNG file, so Verify reports Authentic."
+  ],
+  "cover_file": "cover.jpg",
+  "stego_file": "protected.png",
+  "unchanged": true,
+  "created": "2026-10-01T05:31:22+00:00"
+}
