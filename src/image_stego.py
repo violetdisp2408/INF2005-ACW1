@@ -134,9 +134,8 @@ def run_tests():
     print("==================================================\n")
 
     if not os.path.exists("sample.png"):
-        print("[!] ERROR: 'sample.png' not found in root folder.")
-        print("Please place a PNG image named 'sample.png' in your project root folder.")
-        return
+        print("    -> 'sample.png' not found. Generating synthetic test image...")
+        generate_sample_image("sample.png")
 
     print("[1] Generating RSA Key Pairs...")
     private_key_A, public_key_A = generate_key_pair()
@@ -189,6 +188,18 @@ def run_tests():
     
     print(f"Result   : {'[FAIL] SIGNATURE INVALID (EXPECTED BEHAVIOR)' if not is_valid_2 else '[FAIL] INCORRECTLY ACCEPTED'}")
     print("==================================================\n")
+
+def generate_sample_image(output_path: str = "sample.png", size=(200, 200)) -> str:
+    """Generates a synthetic RGB image for testing if none exists."""
+    width, height = size
+    array = np.zeros((height, width, 3), dtype=np.uint8)
+    array[:, :, 0] = np.linspace(0, 255, width, dtype=np.uint8)
+    array[:, :, 1] = np.linspace(0, 255, height, dtype=np.uint8)[:, None]
+    array[:, :, 2] = 128
+
+    img = Image.fromarray(array, mode='RGB')
+    img.save(output_path, format='PNG')
+    return output_path
 
 if __name__ == "__main__":
     run_tests()
